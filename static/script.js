@@ -56,30 +56,52 @@
 
   let uidCounter = 0; const uid = (p='id') => `${p}-${Date.now().toString(36)}-${(uidCounter++)}`;
 
+  const SVGNS = 'http://www.w3.org/2000/svg';
+
+  /** 確保 g 內有 <title>，並讓 aria-labelledby 指到它 */
+  function ensureTitle(g, name){
+    let titleEl = g.querySelector('title');
+    const titleId = g.getAttribute('data-title-id') || uid('title');
+
+    if (!titleEl) {
+      titleEl = document.createElementNS(SVGNS, 'title');
+      titleEl.id = titleId;
+      // 放在 g 的第一個子節點，行動讀屏抓取最穩
+      g.insertBefore(titleEl, g.firstChild);
+    } else if (!titleEl.id) {
+      titleEl.id = titleId;
+    }
+    titleEl.textContent = (name && String(name).trim()) || '未命名';
+
+    g.setAttribute('data-title-id', titleId);
+    g.setAttribute('aria-labelledby', titleId);
+  }
+
   function createGroup(roleLabel='未命名'){
-    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    const g = document.createElementNS(SVGNS,'g');
     g.classList.add('shape');
     g.setAttribute('tabindex', '0');
-    g.setAttribute('role','img');
-    g.setAttribute('aria-label', roleLabel);
+
+    // 讓行動讀屏把它當可探索的物件
+    g.setAttribute('role','button');
+    g.setAttribute('aria-roledescription','地圖標示');
+
+    // 初始資料屬性
     g.setAttribute('data-name', roleLabel);
     g.setAttribute('data-locked','false');
     g.setAttribute('aria-selected','false');
     g.id = uid('shape');
 
-      // ★ 新增：SVG title + aria-labelledby（多數行動讀屏最吃這個）
-    const titleEl = document.createElementNS('http://www.w3.org/2000/svg','title');
-    const titleId = uid('title');
-    titleEl.setAttribute('id', titleId);
-    titleEl.textContent = roleLabel;
-    g.setAttribute('aria-labelledby', titleId);
-    g.appendChild(titleEl);
+    // 建立 <title> 與 aria-labelledby
+    ensureTitle(g, roleLabel);
 
+    // 事件
     g.addEventListener('keydown', onShapeKey);
     g.addEventListener('dblclick', ()=> renameShape(g));
     let pressTimer=null;
     g.addEventListener('touchstart', ()=>{ pressTimer=setTimeout(()=>renameShape(g), 600); }, {passive:true});
     g.addEventListener('touchend', ()=>{ if(pressTimer) clearTimeout(pressTimer); });
+
     return g;
   }
 
@@ -212,11 +234,12 @@
   // === 小工具 ===
   function svg(name, attrs){ const el=document.createElementNS('http://www.w3.org/2000/svg', name); for(const k in attrs){ el.setAttribute(k, attrs[k]); } return el; }
   function svgText(x,y,text,anchor){
-  const t = svg('text',{x,y,'text-anchor':anchor,'dominant-baseline':'middle','font-size':textSize, fill:'#dbe6f2'});
-  t.textContent = text;
-  t.setAttribute('aria-hidden','true');   // ★ 避免和 <title> 名稱重複被念兩次
-  return t;
-}
+    const t = svg('text',{x,y,'text-anchor':anchor,'dominant-baseline':'middle','font-size':textSize, fill:'#dbe6f2'});
+    t.textContent = text;
+    t.setAttribute('aria-hidden','true');   // 避免和 <title> 被念兩次
+    return t;
+  }
+
   function resizeHandle(x,y){ const g=svg('g', {transform:`translate(${x},${y})`}); g.classList.add('handle'); g.setAttribute('cursor','nwse-resize'); g.appendChild(svg('rect',{width:12,height:12,rx:2})); return g; }
 
   // === 拖曳/縮放 ===
@@ -245,12 +268,21 @@
     const name = prompt('輸入名稱（例如：教室A、廁所、電梯、路口）', g.getAttribute('data-name')||'');
     if(name===null) return;
     const trimmed = name.trim() || '未命名';
+
     g.setAttribute('data-name', trimmed);
-    g.setAttribute('aria-label', trimmed);               // 後備
-    const text = g.querySelector('text'); if (text) text.textContent = trimmed;
-    const titleEl = g.querySelector('title'); if (titleEl) titleEl.textContent = trimmed;  // ★ 同步 <title>
+
+    // 同步 <title>（讀屏會唸這個）
+    const titleId = g.getAttribute('data-title-id');
+    const titleEl = titleId ? g.querySelector(`#${CSS.escape(titleId)}`) : g.querySelector('title');
+    if (titleEl) titleEl.textContent = trimmed;
+
+    // 可見文字也更新
+    const text = g.querySelector('text');
+    if (text) text.textContent = trimmed;
+
     announce(`已命名為：${trimmed}`);
   }
+
   function deleteShape(g){ if(!g) return; g.remove(); announce('已刪除項目'); updateLockBadge(null); }
   function toggleLock(g){ if(!g) return; const locked=g.getAttribute('data-locked')==='true'; g.setAttribute('data-locked', String(!locked)); updateLockBadge(g); announce(locked?'已解鎖':'已鎖定'); }
 
@@ -522,6 +554,8 @@
         // 依圖形填色設定對比字色（只設一次）
         label.setAttribute('fill', contrastTextColor(fill));
 
+        ensureTitle(g, s.name);
+
         const handle = resizeHandle(s.x+(s.w||0)-8, s.y+(s.h||0)-8);
         g.append(outline, rect, label, handle); layer.appendChild(g);
 
@@ -562,6 +596,8 @@
         const label = svgText(s.x, s.y, s.name||'', 'middle');
         label.setAttribute('fill', contrastTextColor(fill)); // 只設一次
 
+        ensureTitle(g, s.name);
+
         const handle = resizeHandle(s.x+(s.r||48)-6, s.y-6);
         g.append(outline, circle, label, handle); layer.appendChild(g);
 
@@ -595,6 +631,8 @@
         const t = svgText(s.x, s.y, s.name||'', 'start');
         t.setAttribute('fill', color);
         g.setAttribute('data-color', color);
+
+        ensureTitle(g, s.name);
 
         const outline = svg('rect',{x:(s.x||0)-6, y:(s.y||0)-22, width:110, height:32, rx:8, class:'outline','pointer-events':'none'});
         g.append(outline, t); layer.appendChild(g);
