@@ -149,8 +149,8 @@
     const label = svgText(x+w/2, y+h/2, '未命名', 'middle');
     label.setAttribute('fill', contrastTextColor(currentColor));
     const handle = resizeHandle(x+w-8, y+h-8);
-    markChildrenA11y(g);
     g.append(outline, rect, label, handle); layer.appendChild(g);
+    markChildrenA11y(g);
 
     // 拖曳：吸附
     enableDrag(g, {
@@ -193,8 +193,8 @@
     const label = svgText(cx, cy, '未命名', 'middle');
     label.setAttribute('fill', contrastTextColor(currentColor));
     const handle = resizeHandle(cx+r-6, cy-6);
-    markChildrenA11y(g);
     g.append(outline, circle, label, handle); layer.appendChild(g);
+    markChildrenA11y(g);
 
     // 拖曳：吸附中心點
     enableDrag(g, {
@@ -229,8 +229,8 @@
     g.setAttribute('data-color', currentColor);
 
     const outline = svg('rect', {x:x-6, y:y-22, width:110, height:32, rx:8, class:'outline','pointer-events':'none'});
-    markChildrenA11y(g);
     g.append(outline, t); layer.appendChild(g);
+    markChildrenA11y(g);
 
     // 拖曳：吸附文字座標
     enableDrag(g, {
@@ -576,6 +576,7 @@
 
         const handle = resizeHandle(s.x+(s.w||0)-8, s.y+(s.h||0)-8);
         g.append(outline, rect, label, handle); layer.appendChild(g);
+        markChildrenA11y(g);
 
         // 反序列化後拖曳：以「當下屬性」為基準，避免第二次拖曳跳位
         enableDrag(g,{onMove:(dx,dy)=>{
@@ -618,6 +619,7 @@
 
         const handle = resizeHandle(s.x+(s.r||48)-6, s.y-6);
         g.append(outline, circle, label, handle); layer.appendChild(g);
+        markChildrenA11y(g);
 
         // 拖曳：以目前屬性為基準
         enableDrag(g,{onMove:(dx,dy)=>{
@@ -654,6 +656,7 @@
 
         const outline = svg('rect',{x:(s.x||0)-6, y:(s.y||0)-22, width:110, height:32, rx:8, class:'outline','pointer-events':'none'});
         g.append(outline, t); layer.appendChild(g);
+        markChildrenA11y(g);
 
         enableDrag(g,{onMove:(dx,dy)=>{
           const bx = Number(t.getAttribute('x'));
