@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OM地圖拼拼樂 — 1.0版</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+<body>
+  <div class="app" role="application" aria-label="OM地圖拼拼樂 原型">
+    <div class="topbar">
+      <div class="brand">🌐OM地圖拼拼樂 — 1.0版</div>
+      <span id="status" class="chip">提示：點「工具」新增圖形，點兩下可命名</span>
+      <div class="spacer"></div>
+      <button id="toggleToolsTop" class="btn">工具</button>
+    </div>
+    <div class="canvas-wrap">
+      <div id="toolbox" class="toolbox" aria-live="polite">
+        <div class="panel" role="region" aria-label="工具">
+          <div class="panel-header">
+            <div class="panel-title">工具</div>
+            <div>
+              <span id="lockBadge" class="badge" aria-hidden="true">未選取</span>
+              <button id="hideTools" class="btn">收起</button>
+            </div>
+          </div>
+
+          <div class="panel-body">
+            <button class="tool" id="addRect" aria-label="新增方形">＋ 方形</button>
+            <button class="tool" id="addCircle" aria-label="新增圓形">＋ 圓形</button>
+            <button class="tool" id="addLabel" aria-label="新增標籤">＋ 標籤</button>
+            <button class="tool" id="rename" aria-label="重新命名已選取項目">命名</button>
+            <button class="tool" id="delete" aria-label="刪除已選取項目">刪除</button>
+            <button class="tool" id="toggleLock" aria-label="鎖定或解鎖已選取項目">鎖定/解鎖</button>
+          </div>
+
+        <!-- 顏色列 -->
+        <div class="row" id="colorRow" aria-label="顏色">
+          <span class="chip" aria-hidden="true">顏色：</span>
+          <button class="tool color-swatch" data-color="#e74c3c" aria-label="紅色" title="紅色" style="--swatch:#e74c3c"></button>
+          <button class="tool color-swatch" data-color="#2ecc71" aria-label="綠色" title="綠色" style="--swatch:#2ecc71"></button>
+          <button class="tool color-swatch" data-color="#f1c40f" aria-label="黃色" title="黃色" style="--swatch:#f1c40f"></button>
+          <button class="tool color-swatch" data-color="#3498db" aria-label="藍色" title="藍色" style="--swatch:#3498db"></button>
+          <button class="tool color-swatch" data-color="#9b59b6" aria-label="紫色" title="紫色" style="--swatch:#9b59b6"></button>
+          <button class="tool color-swatch" data-color="#95a5a6" aria-label="灰色" title="灰色" style="--swatch:#95a5a6"></button>
+          <label class="btn ghost" for="colorPicker" title="自訂顏色">自訂</label>
+          <input id="colorPicker" type="color" value="#233348" aria-label="自訂顏色" />
+        </div>
+
+          <!-- 文字大小 -->
+            <div class="row" id="textRow" aria-label="文字大小">
+              <span class="chip">文字大小：</span>
+              <input id="textSize" type="range" min="10" max="28" step="1" value="14" aria-label="文字大小（點此拖曳）">
+              <span class="chip" id="textSizeVal">14px</span>
+            </div>
+
+          <!-- 格線／吸附 -->
+            <div class="row" id="gridRow" aria-label="格線與吸附">
+              <button class="btn" id="btnToggleGrid" aria-pressed="false">顯示格線</button>
+              <button class="btn" id="btnToggleSnap" aria-pressed="true">吸附：開</button>
+              <span class="chip">單位：24px</span>
+            </div>
+
+          <!-- 檔案/儲存列 -->
+          <div class="row equalize">
+            <button class="btn accent" id="btnSave">存檔到雲端</button>
+            <button class="btn" id="btnLoad">從雲端載入</button>
+            <button class="btn ghost" id="btnExport">匯出 JSON</button>
+            <label class="btn ghost" for="fileInput" id="btnImportLabel">匯入 JSON</label>
+            <input id="fileInput" type="file" accept="application/json" />
+          </div>
+        </div>
+      </div>
+
+      <div class="fab"><button id="showTools" class="btn primary" aria-label="打開工具">工具</button></div>
+
+      <svg id="stage" role="img" aria-label="製圖區，可拖曳與命名圖形" tabindex="0">
+        <defs>
+            <style>
+              .outline {
+                fill: none;
+                stroke: #76a6ff;
+                stroke-width: 1.5px;
+              }
+            </style>
+        </defs>
+        <g id="shapes" aria-label="圖形群組"></g>
+      </svg>
+
+      <div id="live" class="sr-only" aria-live="polite"></div>
+    </div>
+  </div>
+  <div class="notice-bar" role="note">
+      測試版：目前「存檔到伺服器」為暫存，重啟會清除資料，請使用「匯出 JSON」自行備份。
+  </div>
+
+<script src="{{ url_for('static', filename='script.js') }}" defer></script>
+
+</body>
+</html>

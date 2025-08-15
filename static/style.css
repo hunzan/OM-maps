@@ -1,0 +1,167 @@
+:root{
+  --bg:#0b0e12; --panel:#141a22; --panel2:#10161d; --text:#eef2f7; --muted:#9fb0c3;
+  --accent:#39c6a6; --accent-2:#4da3ff; --danger:#ff6b6b; --focus:#ffd166;
+}
+
+html,body{height:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font:16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans TC, sans-serif;
+}
+
+.app{display:grid; grid-template-rows:auto 1fr; height:100%;}
+.topbar{
+  display:flex; align-items:center; gap:.5rem; padding:.5rem .75rem;
+  background:linear-gradient(180deg,var(--panel),var(--panel2)); border-bottom:1px solid #1c2430;
+}
+.brand{font-weight:700; letter-spacing:.02em;}
+.spacer{flex:1;}
+
+.btn{
+  appearance:none; border:1px solid #2a3442; background:#0f1520; color:var(--text);
+  padding:.45rem .7rem; border-radius:.75rem; cursor:pointer;
+}
+.btn:hover{border-color:#3a4657}
+.btn.primary{border-color:transparent; background:linear-gradient(180deg,#248f83,#1d796e);}
+.btn.accent{border-color:transparent; background:linear-gradient(180deg,#2a7cff,#2463c7);}
+.btn.danger{border-color:transparent; background:linear-gradient(180deg,#ff5c5c,#d94d4d);}
+.btn.ghost{background:#0f1520; border:1px dashed #2a3442;}
+
+.canvas-wrap{position:relative; height:100%;}
+svg#stage{
+  width:100%; height:100%; touch-action:none;
+  background:repeating-conic-gradient(#0e141c 0 25%, #0c1118 0 50%) 50%/24px 24px;
+}
+
+.toolbox{
+  position:absolute; inset:auto 0 auto .75rem; top:.75rem; z-index:10;
+  width:clamp(300px, 64vw, 520px); color:var(--text);
+}
+.panel{
+  background:rgba(20,26,34,.96); border:1px solid #233040; border-radius:1rem;
+  box-shadow:0 10px 30px rgba(0,0,0,.35); overflow:hidden;
+}
+.panel-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:.6rem .8rem; background:rgba(18,24,32,.9); border-bottom:1px solid #223041
+}
+.panel-title{font-weight:700}
+.panel-body{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem; padding:.75rem;}
+.row{display:flex; gap:.5rem; padding:.5rem .75rem; border-top:1px solid #223041; flex-wrap:wrap;}
+
+.tool{
+  display:flex; gap:.5rem; align-items:center; justify-content:center;
+  padding:.55rem .6rem; background:#0f1520; border:1px solid #2a3442; border-radius:.7rem;
+  cursor:pointer; user-select:none;
+}
+.tool:focus-visible{outline:3px solid var(--focus); outline-offset:2px;}
+.tool:hover{border-color:#3a4657}
+
+.chip{font-size:.8rem; color:var(--muted);}
+.fab{position:absolute; right:.75rem; bottom:.75rem; z-index:10;}
+.fab button{padding:.8rem 1rem; border-radius:999px; box-shadow:0 10px 30px rgba(0,0,0,.4)}
+
+.shape[aria-selected="true"] .outline{stroke:var(--accent-2); stroke-dasharray:4 3;}
+.handle{pointer-events:all;}
+.handle rect{fill:var(--accent-2);}
+.shape:focus-visible{outline:3px solid var(--focus); outline-offset:2px;}
+
+.sr-only{position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;}
+.badge{display:inline-block; padding:.1rem .4rem; border:1px solid #2a3442; border-radius:.5rem; font-size:.75rem; color:var(--muted)}
+
+input[type="file"]{display:none;}
+label[for="fileInput"]{cursor:pointer;}
+
+/* 獨立補充：給 SVG outline 的基本樣式（HTML 外部 CSS 也會作用在 SVG） */
+.outline{ fill:none; stroke:#76a6ff; stroke-width:1.5px; }
+
+/* === 格線樣式（顯示/隱藏用） === */
+:root { --grid-size: 24px; }
+
+svg#stage {
+  /* 原本就有的背景；我們保留底色，改用 class 切換格線 */
+  background: #0c1118;
+}
+
+/* 開格線時，用兩層 repeating linear-gradient 疊出交叉格線 */
+#stage.show-grid {
+  background-image:
+    repeating-linear-gradient(0deg,  #0f1520 0, #0f1520 calc(var(--grid-size) - 1px), #17202b calc(var(--grid-size) - 1px), #17202b var(--grid-size)),
+    repeating-linear-gradient(90deg, #0f1520 0, #0f1520 calc(var(--grid-size) - 1px), #17202b calc(var(--grid-size) - 1px), #17202b var(--grid-size));
+  background-size: var(--grid-size) var(--grid-size);
+}
+/* === 工具面板高對比微調 === */
+.panel{
+  background: rgba(28, 36, 48, .96);         /* 原本更深 → 稍微變亮 */
+  border-color: #2d3b4c;
+}
+.panel-header{
+  background: rgba(24, 32, 44, .96);
+  border-bottom-color: #314055;
+}
+.panel-title{ color: #eef4ff; }
+.row{ border-top-color: #314055; }
+
+.tool{
+  background: #121a24;
+  border-color: #2e3c4f;
+  color: #e7eef8;
+}
+.tool:hover{ border-color:#3a4d66; }
+.tool:focus-visible{ outline: 3px solid #ffd166; }
+
+.btn {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.btn:hover{ border-color:#4a6c93; }
+.btn.accent{ background:linear-gradient(180deg,#2e86ff,#2161c7); }
+.btn.primary{ background:linear-gradient(180deg,#2aa88f,#1c7d6d); }
+
+.badge, .chip{ color:#bcd0e6; }
+
+.notice-bar {
+  background: #222a33;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid #2a3442;
+}
+/* 讓同一列的按鈕「等寬、置中、同高」 */
+.row.equalize .btn {
+  display: inline-flex;           /* label/button 都吃得到 */
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;                    /* 等分可用寬度 */
+  min-height: 2.4rem;             /* 統一高度 */
+  text-align: center;
+}
+
+/* 小螢幕時兩欄排，避免太窄 */
+@media (max-width: 640px) {
+  .row.equalize .btn {
+    flex: 1 1 calc(50% - .5rem);  /* 同列兩顆 */
+  }
+}
+/* 顏色色票：實心圓、可聚焦、可讀屏 */
+.color-swatch{
+  --swatch:#95a5a6;           /* 預設顏色，沒指定就用這個 */
+  background-color: var(--swatch);
+  border-color: var(--swatch);
+  width: 28px;
+  height: 28px;
+  padding: 0;                 /* 拿掉 .tool 的內距 */
+  border-width: 2px;
+  border-style: solid;
+  border-radius: 999px;
+  line-height: 0;             /* 不要文字高度 */
+  font-size: 0;               /* 不顯示「●」等字 */
+}
+
+/* 聚焦與選取的視覺提示 */
+.color-swatch:focus-visible{ outline:3px solid var(--focus); outline-offset:2px; }
+.color-swatch[aria-selected="true"]{
+  box-shadow: 0 0 0 3px rgba(255,255,255,.18) inset, 0 0 0 2px rgba(0,0,0,.35);
+}
