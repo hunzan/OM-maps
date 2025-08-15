@@ -4,6 +4,14 @@
   const live = document.getElementById('live');
   const statusEl = document.getElementById('status');
 
+    // --- A11Y 防呆：確保 SVG 不是原子圖片，讓讀屏能讀到內部 <g> ---
+  if (stage) {
+    stage.removeAttribute('role');        // 移除舊版 role="img"
+    stage.removeAttribute('aria-label');  // 移除外層 aria-label（避免覆蓋內部）
+    stage.removeAttribute('tabindex');    // 讓焦點進入子元素
+    stage.setAttribute('role', 'group');  // 或 'graphics-document' 皆可
+  }
+
   const toolbox = document.getElementById('toolbox');
   const showToolsBtn = document.getElementById('showTools');
   const hideToolsBtn = document.getElementById('hideTools');

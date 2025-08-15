@@ -11,7 +11,7 @@
   <div class="app" role="application" aria-label="OM地圖拼拼樂 原型">
     <div class="topbar">
       <div class="brand">🌐OM地圖拼拼樂 — 1.0版</div>
-      <span id="status" class="chip">提示：點「工具」新增圖形，點兩下可命名</span>
+      <span id="status" class="chip">提示：用「工具」新增圖形，命名請按工具列的「命名」</span>
       <div class="spacer"></div>
       <button id="toggleToolsTop" class="btn">工具</button>
     </div>
@@ -75,18 +75,16 @@
 
       <div class="fab"><button id="showTools" class="btn primary" aria-label="打開工具">工具</button></div>
 
-      <svg id="stage" role="img" aria-label="製圖區，可拖曳與命名圖形" tabindex="0">
-        <defs>
+        <!-- 製圖區（不要 role="img"、不要 aria-label、不要 tabindex） -->
+        <svg id="stage" role="group">
+          <defs>
             <style>
-              .outline {
-                fill: none;
-                stroke: #76a6ff;
-                stroke-width: 1.5px;
-              }
+              .outline { fill: none; stroke: #76a6ff; stroke-width: 1.5px; }
             </style>
-        </defs>
-        <g id="shapes" aria-label="圖形群組"></g>
-      </svg>
+          </defs>
+          <desc id="stageDesc">可觸控的製圖區，內含多個地圖標示。</desc>
+          <g id="shapes" role="group"></g>
+        </svg>
 
       <div id="live" class="sr-only" aria-live="polite"></div>
     </div>
