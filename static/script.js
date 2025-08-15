@@ -58,49 +58,60 @@
 
   const SVGNS = 'http://www.w3.org/2000/svg';
 
-  /** 確保 g 內有 <title>，並讓 aria-labelledby 指到它 */
+  /** 確保 g 內有 <title>，讓 aria-labelledby 指向它（讀屏主要名稱來源） */
   function ensureTitle(g, name){
     let titleEl = g.querySelector('title');
     const titleId = g.getAttribute('data-title-id') || uid('title');
-
     if (!titleEl) {
       titleEl = document.createElementNS(SVGNS, 'title');
       titleEl.id = titleId;
-      // 放在 g 的第一個子節點，行動讀屏抓取最穩
       g.insertBefore(titleEl, g.firstChild);
     } else if (!titleEl.id) {
       titleEl.id = titleId;
     }
     titleEl.textContent = (name && String(name).trim()) || '未命名';
-
     g.setAttribute('data-title-id', titleId);
     g.setAttribute('aria-labelledby', titleId);
+  }
+
+  /** 把可見的圖形（rect/circle/text）標上 aria，並把裝飾 outline/handle 隱藏 */
+  function markChildrenA11y(g){
+    const name = g.getAttribute('data-name') || '未命名';
+    // 裝飾都隱藏
+    g.querySelectorAll('.outline, .handle, .handle *').forEach(el=>{
+      el.setAttribute('aria-hidden','true');
+    });
+    // 可見文字只當視覺用，不重複朗讀
+    g.querySelectorAll('text').forEach(t=>{
+      t.setAttribute('aria-hidden','true');
+    });
+    // 主體圖形（二選一）
+    const body = g.querySelector('rect:not(.outline), circle:not(.outline)');
+    if (body){
+      body.setAttribute('role','img');         // 有些讀屏更吃這個
+      body.setAttribute('aria-label', name);   // 次要名稱來源（若 g 被忽略時仍可唸）
+      body.setAttribute('focusable','false');  // 避免跟 g 搶焦點
+    }
   }
 
   function createGroup(roleLabel='未命名'){
     const g = document.createElementNS(SVGNS,'g');
     g.classList.add('shape');
     g.setAttribute('tabindex', '0');
-
-    // 讓行動讀屏把它當可探索的物件
-    g.setAttribute('role','button');
+    g.setAttribute('focusable', 'true');              // Android 有些版本需要
+    g.setAttribute('role','button');                  // 把它當可探索物件
     g.setAttribute('aria-roledescription','地圖標示');
 
-    // 初始資料屬性
     g.setAttribute('data-name', roleLabel);
     g.setAttribute('data-locked','false');
     g.setAttribute('aria-selected','false');
     g.id = uid('shape');
 
-    // 建立 <title> 與 aria-labelledby
+    // 可計算名稱：<title> + aria-labelledby
     ensureTitle(g, roleLabel);
 
-    // 事件
+    // 只保留鍵盤移動；「圖上雙擊/長按改名」移除，改走工具列按鈕
     g.addEventListener('keydown', onShapeKey);
-    g.addEventListener('dblclick', ()=> renameShape(g));
-    let pressTimer=null;
-    g.addEventListener('touchstart', ()=>{ pressTimer=setTimeout(()=>renameShape(g), 600); }, {passive:true});
-    g.addEventListener('touchend', ()=>{ if(pressTimer) clearTimeout(pressTimer); });
 
     return g;
   }
@@ -138,6 +149,7 @@
     const label = svgText(x+w/2, y+h/2, '未命名', 'middle');
     label.setAttribute('fill', contrastTextColor(currentColor));
     const handle = resizeHandle(x+w-8, y+h-8);
+    markChildrenA11y(g);
     g.append(outline, rect, label, handle); layer.appendChild(g);
 
     // 拖曳：吸附
@@ -181,6 +193,7 @@
     const label = svgText(cx, cy, '未命名', 'middle');
     label.setAttribute('fill', contrastTextColor(currentColor));
     const handle = resizeHandle(cx+r-6, cy-6);
+    markChildrenA11y(g);
     g.append(outline, circle, label, handle); layer.appendChild(g);
 
     // 拖曳：吸附中心點
@@ -216,6 +229,7 @@
     g.setAttribute('data-color', currentColor);
 
     const outline = svg('rect', {x:x-6, y:y-22, width:110, height:32, rx:8, class:'outline','pointer-events':'none'});
+    markChildrenA11y(g);
     g.append(outline, t); layer.appendChild(g);
 
     // 拖曳：吸附文字座標
@@ -271,12 +285,14 @@
 
     g.setAttribute('data-name', trimmed);
 
-    // 同步 <title>（讀屏會唸這個）
-    const titleId = g.getAttribute('data-title-id');
-    const titleEl = titleId ? g.querySelector(`#${CSS.escape(titleId)}`) : g.querySelector('title');
-    if (titleEl) titleEl.textContent = trimmed;
+    // 同步 <title>（主要朗讀來源）
+    ensureTitle(g, trimmed);
 
-    // 可見文字也更新
+    // 同步主體 rect/circle 的 aria-label（次要朗讀來源）
+    const body = g.querySelector('rect:not(.outline), circle:not(.outline)');
+    if (body) body.setAttribute('aria-label', trimmed);
+
+    // 同步可見文字
     const text = g.querySelector('text');
     if (text) text.textContent = trimmed;
 
@@ -360,7 +376,9 @@
       case 'ArrowDown': move(0, step); break;
       case 'ArrowLeft': move(-step,0); break;
       case 'ArrowRight': move(step,0); break;
-      case 'Enter': renameShape(g); break;
+      case 'Enter':
+        announce('請用工具列的「命名」按鈕更名');
+        break;
       case 'Delete': deleteShape(g); break;
     }
   }
