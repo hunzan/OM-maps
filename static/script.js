@@ -139,7 +139,17 @@
     }
   }
 
-  function updateLockBadge(g){ if(!g){ lockBadge.textContent='未選取'; return;} lockBadge.textContent = g.getAttribute('data-locked')==='true'?'已鎖定':'可編輯'; }
+  function updateLockBadge(_) {
+    const all = document.querySelectorAll('.shape');
+    if (!all.length) {
+      lockBadge.textContent = '未選取';
+      return;
+    }
+    const someLocked = Array.from(all).some(g => g.getAttribute('data-locked') === 'true');
+    lockBadge.textContent = someLocked ? '已鎖定' : '可編輯';
+  }
+
+  document.getElementById('toggleLock').addEventListener('click', toggleLockAll);
 
   // === 形狀建立 ===
   function addRect(){
@@ -229,30 +239,6 @@
     selectShape(g); setStatus('已新增圓形。雙擊可命名，拖曳可移動。');
   }
 
-  function addLabel(){
-    const g = createGroup('未命名標籤');
-    const x=120, y=120;
-    const t = svgText(x, y, '未命名', 'start');
-    t.setAttribute('fill', currentColor);
-    g.setAttribute('data-color', currentColor);
-
-    const outline = svg('rect', {x:x-6, y:y-22, width:110, height:32, rx:8, class:'outline','pointer-events':'none'});
-    g.append(outline, t); layer.appendChild(g);
-    markChildrenA11y(g);
-
-    // 拖曳：吸附文字座標
-    enableDrag(g, {
-      onMove:(dx,dy)=>{
-        const nx = snapOn ? snap(x + dx) : (x + dx);
-        const ny = snapOn ? snap(y + dy) : (y + dy);
-        t.setAttribute('x',nx); t.setAttribute('y',ny);
-        outline.setAttribute('x',nx-6); outline.setAttribute('y',ny-22);
-      }
-    });
-
-    selectShape(g); setStatus('已新增標籤。雙擊可命名，拖曳可移動。');
-  }
-
   // === 小工具 ===
   function svg(name, attrs){ const el=document.createElementNS('http://www.w3.org/2000/svg', name); for(const k in attrs){ el.setAttribute(k, attrs[k]); } return el; }
   function svgText(x,y,text,anchor){
@@ -265,14 +251,42 @@
   function resizeHandle(x,y){ const g=svg('g', {transform:`translate(${x},${y})`}); g.classList.add('handle'); g.setAttribute('cursor','nwse-resize'); g.appendChild(svg('rect',{width:12,height:12,rx:2})); return g; }
 
   // === 拖曳/縮放 ===
-  function enableDrag(g, opts){
-    const locked = ()=> g.getAttribute('data-locked')==='true';
-    let start=null;
-    g.addEventListener('pointerdown', (ev)=>{ if (ev.target.closest('.handle')) return; if (locked()) { selectShape(g); return; } selectShape(g); const pt=svgPoint(ev); start={x:pt.x,y:pt.y}; g.setPointerCapture?.(ev.pointerId); ev.preventDefault(); });
-    g.addEventListener('pointermove', (ev)=>{ if(!start) return; const pt=svgPoint(ev); const dx=pt.x-start.x, dy=pt.y-start.y; opts.onMove(dx,dy); });
-    const end=()=>{ start=null; }; g.addEventListener('pointerup', end); g.addEventListener('pointercancel', end);
-    g.addEventListener('pointerdown', ()=> selectShape(g));
-  }
+    function enableDrag(g, opts){
+      const locked = ()=> g.getAttribute('data-locked')==='true';
+      let start=null;
+
+      g.addEventListener('pointerdown', (ev)=>{
+        if (ev.target.closest('.handle')) return;
+        if (locked()) { selectShape(g); return; }
+        selectShape(g);
+        const pt=svgPoint(ev);
+        start={x:pt.x,y:pt.y};
+        g.setPointerCapture?.(ev.pointerId);
+        ev.preventDefault();
+      });
+
+      g.addEventListener('pointermove', (ev)=>{
+        if(!start) return;
+        const pt = svgPoint(ev);
+        let dx = pt.x - start.x;
+        let dy = pt.y - start.y;
+
+        // 若 onMove 回傳實際移動後的新位置，更新 start
+        const result = opts.onMove(dx, dy);
+        if (result && result.x != null && result.y != null) {
+          start.x = result.x;
+          start.y = result.y;
+        } else {
+          // 否則用滑鼠當下位置當新起點（可能有跳動）
+          start = pt;
+        }
+      });
+
+      const end=()=>{ start=null; };
+      g.addEventListener('pointerup', end);
+      g.addEventListener('pointercancel', end);
+      g.addEventListener('pointerdown', ()=> selectShape(g));
+    }
 
   function enableResize(g, handle, onResize){
     const locked = ()=> g.getAttribute('data-locked')==='true';
@@ -308,7 +322,17 @@
   }
 
   function deleteShape(g){ if(!g) return; g.remove(); announce('已刪除項目'); updateLockBadge(null); }
-  function toggleLock(g){ if(!g) return; const locked=g.getAttribute('data-locked')==='true'; g.setAttribute('data-locked', String(!locked)); updateLockBadge(g); announce(locked?'已解鎖':'已鎖定'); }
+
+  // ✅ 將 toggleLock 改為針對所有圖形統一鎖定/解鎖
+  function toggleLockAll(){
+    const all = document.querySelectorAll('.shape');
+    if (!all.length) return;
+    const someLocked = Array.from(all).some(g => g.getAttribute('data-locked') === 'true');
+    const newState = String(!someLocked);
+    all.forEach(g => g.setAttribute('data-locked', newState));
+    updateLockBadge(null);
+    announce(newState === 'true' ? '全部已鎖定' : '全部已解鎖');
+  }
 
   function onShapeKey(ev){
     const g = ev.currentTarget; const step = ev.shiftKey?10:5;
@@ -532,6 +556,7 @@
   });
 
   // === 序列化 / 反序列化 ===
+  // === serialize（匯出）：一律鎖定 ===
   function serialize(){
     const out = [];
     layer.querySelectorAll('.shape').forEach(g=>{
@@ -539,23 +564,24 @@
       const rect = g.querySelector('rect:not(.outline)');
       const circ = g.querySelector('circle:not(.outline)');
       const label = g.querySelector('text');
+      const locked = true; // 強制鎖定匯出
       if(rect){
         out.push({
-          type:'rect', name,
+          type:'rect', name, locked,
           x:+rect.getAttribute('x'), y:+rect.getAttribute('y'),
           w:+rect.getAttribute('width'), h:+rect.getAttribute('height'),
           fill: g.getAttribute('data-color') || rect.getAttribute('fill') || '#203041'
         });
       }else if(circ){
         out.push({
-          type:'circle', name,
+          type:'circle', name, locked,
           x:+circ.getAttribute('cx'), y:+circ.getAttribute('cy'),
           r:+circ.getAttribute('r'),
           fill: g.getAttribute('data-color') || circ.getAttribute('fill') || '#233348'
         });
       }else if(label){
         out.push({
-          type:'label', name,
+          type:'label', name, locked,
           x:+label.getAttribute('x'), y:+label.getAttribute('y'),
           color: g.getAttribute('data-color') || label.getAttribute('fill') || '#dbe6f2'
         });
@@ -565,133 +591,161 @@
   }
 
   function clearAll(){ [...layer.querySelectorAll('.shape')].forEach(n=>n.remove()); }
-
-  function deserialize(shapes){
+  document.getElementById('btnClear').addEventListener('click', () => {
+  if (confirm('你確定要清除所有圖形嗎？')) {
     clearAll();
-    for(const s of shapes){
-      if(s.type==='rect'){
-        const g = createGroup(s.name||'');
-        const fill = s.fill || '#203041';
-        const rect = svg('rect',{x:s.x,y:s.y,width:s.w,height:s.h,rx:10, fill, stroke:'#2f435a','stroke-width':1.5});
-        g.setAttribute('data-color', fill);
-
-        const outline = svg('rect',{x:s.x-3,y:s.y-3,width:(s.w||0)+6,height:(s.h||0)+6,rx:12,class:'outline','pointer-events':'none'});
-        const label = svgText(s.x+(s.w||0)/2, s.y+(s.h||0)/2, s.name||'', 'middle');
-        // 依圖形填色設定對比字色（只設一次）
-        label.setAttribute('fill', contrastTextColor(fill));
-
-        ensureTitle(g, s.name);
-
-        const handle = resizeHandle(s.x+(s.w||0)-8, s.y+(s.h||0)-8);
-        g.append(outline, rect, label, handle); layer.appendChild(g);
-        markChildrenA11y(g);
-
-        // 反序列化後拖曳：以「當下屬性」為基準，避免第二次拖曳跳位
-        enableDrag(g,{onMove:(dx,dy)=>{
-          const bx = Number(rect.getAttribute('x'));
-          const by = Number(rect.getAttribute('y'));
-          const nx = snapOn ? snap(bx + dx) : (bx + dx);
-          const ny = snapOn ? snap(by + dy) : (by + dy);
-          rect.setAttribute('x',nx); rect.setAttribute('y',ny);
-          outline.setAttribute('x',nx-3); outline.setAttribute('y',ny-3);
-          label.setAttribute('x', nx+Number(rect.getAttribute('width'))/2);
-          label.setAttribute('y', ny+Number(rect.getAttribute('height'))/2);
-          handle.setAttribute('transform', `translate(${nx+Number(rect.getAttribute('width'))-8},${ny+Number(rect.getAttribute('height'))-8})`);
-        }});
-
-        // 縮放吸附
-        enableResize(g, handle, (dw,dh)=>{
-          let nw=Math.max(24, Number(rect.getAttribute('width'))+dw);
-          let nh=Math.max(24, Number(rect.getAttribute('height'))+dh);
-          if (snapOn){ nw = Math.max(24, snap(nw)); nh = Math.max(24, snap(nh)); }
-          rect.setAttribute('width',nw); rect.setAttribute('height',nh);
-          outline.setAttribute('width',nw+6); outline.setAttribute('height',nh+6);
-          label.setAttribute('x', Number(rect.getAttribute('x'))+nw/2);
-          label.setAttribute('y', Number(rect.getAttribute('y'))+nh/2);
-          handle.setAttribute('transform', `translate(${Number(rect.getAttribute('x'))+nw-8},${Number(rect.getAttribute('y'))+nh-8})`);
-        });
-
-        g.setAttribute('data-name', s.name||''); g.setAttribute('aria-label', s.name||'');
-
-      }else if(s.type==='circle'){
-        const g = createGroup(s.name||'');
-        const fill = s.fill || '#233348';
-        const circle = svg('circle',{cx:s.x, cy:s.y, r:s.r||48, fill, stroke:'#2f435a','stroke-width':1.5});
-        g.setAttribute('data-color', fill);
-
-        const outline = svg('circle',{cx:s.x, cy:s.y, r:(s.r||48)+6, class:'outline','pointer-events':'none'});
-        const label = svgText(s.x, s.y, s.name||'', 'middle');
-        label.setAttribute('fill', contrastTextColor(fill)); // 只設一次
-
-        ensureTitle(g, s.name);
-
-        const handle = resizeHandle(s.x+(s.r||48)-6, s.y-6);
-        g.append(outline, circle, label, handle); layer.appendChild(g);
-        markChildrenA11y(g);
-
-        // 拖曳：以目前屬性為基準
-        enableDrag(g,{onMove:(dx,dy)=>{
-          const bx = Number(circle.getAttribute('cx'));
-          const by = Number(circle.getAttribute('cy'));
-          const ncx = snapOn ? snap(bx + dx) : (bx + dx);
-          const ncy = snapOn ? snap(by + dy) : (by + dy);
-          circle.setAttribute('cx',ncx); circle.setAttribute('cy',ncy);
-          outline.setAttribute('cx',ncx); outline.setAttribute('cy',ncy);
-          label.setAttribute('x',ncx); label.setAttribute('y',ncy);
-          handle.setAttribute('transform', `translate(${ncx+Number(circle.getAttribute('r'))-6},${ncy-6})`);
-        }});
-
-        // 縮放：半徑半格吸附
-        enableResize(g, handle, (dw)=>{
-          let nr=Math.max(12, Number(circle.getAttribute('r'))+dw);
-          if (snapOn){ nr = Math.max(12, snapHalf(nr)); }
-          circle.setAttribute('r',nr);
-          outline.setAttribute('r',nr+6);
-          const ncx=Number(circle.getAttribute('cx')), ncy=Number(circle.getAttribute('cy'));
-          handle.setAttribute('transform', `translate(${ncx+nr-6},${ncy-6})`);
-        });
-
-        g.setAttribute('data-name', s.name||''); g.setAttribute('aria-label', s.name||'');
-
-      }else if(s.type==='label'){
-        const g = createGroup(s.name||'');
-        const color = s.color || '#dbe6f2';
-        const t = svgText(s.x, s.y, s.name||'', 'start');
-        t.setAttribute('fill', color);
-        g.setAttribute('data-color', color);
-
-        ensureTitle(g, s.name);
-
-        const outline = svg('rect',{x:(s.x||0)-6, y:(s.y||0)-22, width:110, height:32, rx:8, class:'outline','pointer-events':'none'});
-        g.append(outline, t); layer.appendChild(g);
-        markChildrenA11y(g);
-
-        enableDrag(g,{onMove:(dx,dy)=>{
-          const bx = Number(t.getAttribute('x'));
-          const by = Number(t.getAttribute('y'));
-          const nx = snapOn ? snap(bx + dx) : (bx + dx);
-          const ny = snapOn ? snap(by + dy) : (by + dy);
-          t.setAttribute('x',nx); t.setAttribute('y',ny);
-          outline.setAttribute('x',nx-6); outline.setAttribute('y',ny-22);
-        }});
-
-        g.setAttribute('data-name', s.name||''); g.setAttribute('aria-label', s.name||'');
-      }
-    }
-
-    // 讓載入後也符合目前全域字級
-    applyTextSizeAll(textSize);
   }
+});
 
-  // 工具按鈕
-  document.getElementById('addRect').addEventListener('click', addRect);
-  document.getElementById('addCircle').addEventListener('click', addCircle);
-  document.getElementById('addLabel').addEventListener('click', addLabel);
-  document.getElementById('rename').addEventListener('click', ()=>{ const g=document.querySelector('.shape[aria-selected="true"]'); if(g) renameShape(g); });
-  document.getElementById('delete').addEventListener('click', ()=>{ const g=document.querySelector('.shape[aria-selected="true"]'); if(g) deleteShape(g); });
-  document.getElementById('toggleLock').addEventListener('click', ()=>{ const g=document.querySelector('.shape[aria-selected="true"]'); if(g) toggleLock(g); });
+function deserialize(shapes){
+  clearAll();
+  for(const s of shapes){
+    if(s.type==='rect'){
+      const g = createGroup(s.name||'');
+      const fill = s.fill || '#203041';
+      const rect = svg('rect',{x:s.x,y:s.y,width:s.w,height:s.h,rx:10, fill, stroke:'#2f435a','stroke-width':1.5});
+      g.setAttribute('data-color', fill);
 
-  stage.addEventListener('pointerdown', (ev)=>{ if(ev.target===stage){ selectShape(null); } });
+      const outline = svg('rect',{x:s.x-3,y:s.y-3,width:(s.w||0)+6,height:(s.h||0)+6,rx:12,class:'outline','pointer-events':'none'});
+      const label = svgText(s.x+(s.w||0)/2, s.y+(s.h||0)/2, s.name||'', 'middle');
+      label.setAttribute('fill', contrastTextColor(fill));
 
-  setStatus('準備就緒：點「工具」新增圖形，拖曳移動；雙擊或按 Enter 改名。');
+      ensureTitle(g, s.name);
+
+      const handle = resizeHandle(s.x+(s.w||0)-8, s.y+(s.h||0)-8);
+      g.append(outline, rect, label, handle); layer.appendChild(g);
+      markChildrenA11y(g);
+
+      g.setAttribute('data-name', s.name||'');
+      g.setAttribute('aria-label', s.name||'');
+      g.setAttribute('data-locked', 'false');
+
+      enableDrag(g,{onMove:(dx,dy)=>{
+        if (g.getAttribute('data-locked') === 'true') return;
+        const bx = Number(rect.getAttribute('x'));
+        const by = Number(rect.getAttribute('y'));
+        const nx = snapOn ? snap(bx + dx) : (bx + dx);
+        const ny = snapOn ? snap(by + dy) : (by + dy);
+        rect.setAttribute('x',nx); rect.setAttribute('y',ny);
+        outline.setAttribute('x',nx-3); outline.setAttribute('y',ny-3);
+        label.setAttribute('x', nx+Number(rect.getAttribute('width'))/2);
+        label.setAttribute('y', ny+Number(rect.getAttribute('height'))/2);
+        handle.setAttribute('transform', `translate(${nx+Number(rect.getAttribute('width'))-8},${ny+Number(rect.getAttribute('height'))-8})`);
+        return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
+      }});
+
+      enableResize(g, handle, (dw,dh)=>{
+        if (g.getAttribute('data-locked') === 'true') return;
+        let nw=Math.max(24, Number(rect.getAttribute('width'))+dw);
+        let nh=Math.max(24, Number(rect.getAttribute('height'))+dh);
+        if (snapOn){ nw = Math.max(24, snap(nw)); nh = Math.max(24, snap(nh)); }
+        rect.setAttribute('width',nw); rect.setAttribute('height',nh);
+        outline.setAttribute('width',nw+6); outline.setAttribute('height',nh+6);
+        label.setAttribute('x', Number(rect.getAttribute('x'))+nw/2);
+        label.setAttribute('y', Number(rect.getAttribute('y'))+nh/2);
+        handle.setAttribute('transform', `translate(${Number(rect.getAttribute('x'))+nw-8},${Number(rect.getAttribute('y'))+nh-8})`);
+        return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
+      });
+
+    }else if(s.type==='circle'){
+      const g = createGroup(s.name||'');
+      const fill = s.fill || '#233348';
+      const circle = svg('circle',{cx:s.x, cy:s.y, r:s.r||48, fill, stroke:'#2f435a','stroke-width':1.5});
+      g.setAttribute('data-color', fill);
+
+      const outline = svg('circle',{cx:s.x, cy:s.y, r:(s.r||48)+6, class:'outline','pointer-events':'none'});
+      const label = svgText(s.x, s.y, s.name||'', 'middle');
+      label.setAttribute('fill', contrastTextColor(fill));
+
+      ensureTitle(g, s.name);
+
+      const handle = resizeHandle(s.x+(s.r||48)-6, s.y-6);
+      g.append(outline, circle, label, handle); layer.appendChild(g);
+      markChildrenA11y(g);
+
+      g.setAttribute('data-name', s.name||'');
+      g.setAttribute('aria-label', s.name||'');
+      g.setAttribute('data-locked', 'false');
+
+      enableDrag(g,{onMove:(dx,dy)=>{
+        if (g.getAttribute('data-locked') === 'true') return;
+        const bx = Number(circle.getAttribute('cx'));
+        const by = Number(circle.getAttribute('cy'));
+        const ncx = snapOn ? snap(bx + dx) : (bx + dx);
+        const ncy = snapOn ? snap(by + dy) : (by + dy);
+        circle.setAttribute('cx',ncx); circle.setAttribute('cy',ncy);
+        outline.setAttribute('cx',ncx); outline.setAttribute('cy',ncy);
+        label.setAttribute('x',ncx); label.setAttribute('y',ncy);
+        handle.setAttribute('transform', `translate(${ncx+Number(circle.getAttribute('r'))-6},${ncy-6})`);
+        return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
+      }});
+
+      enableResize(g, handle, (dw)=>{
+        if (g.getAttribute('data-locked') === 'true') return;
+        let nr=Math.max(12, Number(circle.getAttribute('r'))+dw);
+        if (snapOn){ nr = Math.max(12, snapHalf(nr)); }
+        circle.setAttribute('r',nr);
+        outline.setAttribute('r',nr+6);
+        const ncx=Number(circle.getAttribute('cx')), ncy=Number(circle.getAttribute('cy'));
+        handle.setAttribute('transform', `translate(${ncx+nr-6},${ncy-6})`);
+        return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
+      });
+
+    }else if(s.type==='label'){
+      const g = createGroup(s.name||'');
+      const color = s.color || '#dbe6f2';
+      const t = svgText(s.x, s.y, s.name||'', 'start');
+      t.setAttribute('fill', color);
+      g.setAttribute('data-color', color);
+
+      ensureTitle(g, s.name);
+
+      const outline = svg('rect',{x:(s.x||0)-6, y:(s.y||0)-22, width:110, height:32, rx:8, class:'outline','pointer-events':'none'});
+      g.append(outline, t); layer.appendChild(g);
+      markChildrenA11y(g);
+
+      g.setAttribute('data-name', s.name||'');
+      g.setAttribute('aria-label', s.name||'');
+      g.setAttribute('data-locked', 'false');
+
+      enableDrag(g,{onMove:(dx,dy)=>{
+        if (g.getAttribute('data-locked') === 'true') return;
+        const bx = Number(t.getAttribute('x'));
+        const by = Number(t.getAttribute('y'));
+        const nx = snapOn ? snap(bx + dx) : (bx + dx);
+        const ny = snapOn ? snap(by + dy) : (by + dy);
+        t.setAttribute('x',nx); t.setAttribute('y',ny);
+        outline.setAttribute('x',nx-6); outline.setAttribute('y',ny-22);
+        return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
+      }});
+    }
+  }
+  applyTextSizeAll(textSize);
+}
+
+    // 工具按鈕
+    document.getElementById('addRect').addEventListener('click', addRect);
+    document.getElementById('addCircle').addEventListener('click', addCircle);
+    document.getElementById('rename').addEventListener('click', ()=>{
+      const g = document.querySelector('.shape[aria-selected="true"]');
+      if(g) renameShape(g);
+    });
+    document.getElementById('delete').addEventListener('click', ()=>{
+      const g = document.querySelector('.shape[aria-selected="true"]');
+      if(g) deleteShape(g);
+    });
+    document.getElementById('toggleLock').addEventListener('click', ()=>{
+      const g = document.querySelector('.shape[aria-selected="true"]');
+      if(g) toggleLock(g);
+    });
+    document.getElementById('btnClear').addEventListener('click', clearAll); // 🧹 加這行！
+
+    stage.addEventListener('pointerdown', (ev)=>{
+      if(ev.target === stage){
+        selectShape(null);
+      }
+    });
+
+    setStatus('準備就緒：點「工具」新增圖形，拖曳移動；雙擊或按 Enter 改名。');
+
 })();
