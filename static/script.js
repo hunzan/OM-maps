@@ -180,6 +180,7 @@
         label.setAttribute('x', nx + Number(rect.getAttribute('width'))/2);
         label.setAttribute('y', ny + Number(rect.getAttribute('height'))/2);
         handle.setAttribute('transform', `translate(${nx+Number(rect.getAttribute('width'))-8},${ny+Number(rect.getAttribute('height'))-8})`);
+        return {x: nx, y: ny};  // 🟢 回傳吸附後的座標
       }
     });
 
@@ -223,6 +224,7 @@
         outline.setAttribute('cx',ncx); outline.setAttribute('cy',ncy);
         label.setAttribute('x',ncx); label.setAttribute('y',ncy);
         handle.setAttribute('transform', `translate(${ncx+Number(circle.getAttribute('r'))-6},${ncy-6})`);
+        return {x: nx, y: ny};  // 🟢 回傳吸附後的座標
       }
     });
 
