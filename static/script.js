@@ -173,14 +173,16 @@
     // 拖曳：吸附
     enableDrag(g, {
       onMove:(dx,dy)=>{
-        const nx = snapOn ? snap(x + dx) : (x + dx);
-        const ny = snapOn ? snap(y + dy) : (y + dy);
-        rect.setAttribute('x',nx); rect.setAttribute('y',ny);
-        outline.setAttribute('x',nx-3); outline.setAttribute('y',ny-3);
-        label.setAttribute('x', nx + Number(rect.getAttribute('width'))/2);
-        label.setAttribute('y', ny + Number(rect.getAttribute('height'))/2);
-        handle.setAttribute('transform', `translate(${nx+Number(rect.getAttribute('width'))-8},${ny+Number(rect.getAttribute('height'))-8})`);
-        return {x: nx, y: ny};  // 🟢 回傳吸附後的座標
+        const bx = Number(rect.getAttribute('x'));
+        const by = Number(rect.getAttribute('y'));
+        const nx = snapOn ? snap(bx + dx) : (bx + dx);
+        const ny = snapOn ? snap(by + dy) : (by + dy);
+        rect.setAttribute('x', nx); rect.setAttribute('y', ny);
+        outline.setAttribute('x', nx - 3); outline.setAttribute('y', ny - 3);
+        label.setAttribute('x', nx + Number(rect.getAttribute('width')) / 2);
+        label.setAttribute('y', ny + Number(rect.getAttribute('height')) / 2);
+        handle.setAttribute('transform', `translate(${nx + Number(rect.getAttribute('width')) - 8},${ny + Number(rect.getAttribute('height')) - 8})`);
+        return {x: nx, y: ny};  // ✅ 改成回傳新的實際位置
       }
     });
 
@@ -194,6 +196,7 @@
       label.setAttribute('x', Number(rect.getAttribute('x'))+nw/2);
       label.setAttribute('y', Number(rect.getAttribute('y'))+nh/2);
       handle.setAttribute('transform', `translate(${Number(rect.getAttribute('x'))+nw-8},${Number(rect.getAttribute('y'))+nh-8})`);
+      return {x, y};  // 🟢 回傳吸附後的座標
     });
 
     selectShape(g); setStatus('已新增方形。雙擊可命名，拖曳可移動。');
@@ -218,13 +221,21 @@
     // 拖曳：吸附中心點
     enableDrag(g, {
       onMove:(dx,dy)=>{
-        const ncx = snapOn ? snap(cx + dx) : (cx + dx);
-        const ncy = snapOn ? snap(cy + dy) : (cy + dy);
-        circle.setAttribute('cx',ncx); circle.setAttribute('cy',ncy);
-        outline.setAttribute('cx',ncx); outline.setAttribute('cy',ncy);
-        label.setAttribute('x',ncx); label.setAttribute('y',ncy);
-        handle.setAttribute('transform', `translate(${ncx+Number(circle.getAttribute('r'))-6},${ncy-6})`);
-        return {x: nx, y: ny};  // 🟢 回傳吸附後的座標
+        // 🔧 用目前屬性讀取位置，而非初始值 cx/cy
+        const bx = Number(circle.getAttribute('cx'));
+        const by = Number(circle.getAttribute('cy'));
+        const ncx = snapOn ? snap(bx + dx) : (bx + dx);
+        const ncy = snapOn ? snap(by + dy) : (by + dy);
+
+        circle.setAttribute('cx', ncx);
+        circle.setAttribute('cy', ncy);
+        outline.setAttribute('cx', ncx);
+        outline.setAttribute('cy', ncy);
+        label.setAttribute('x', ncx);
+        label.setAttribute('y', ncy);
+        handle.setAttribute('transform', `translate(${ncx + Number(circle.getAttribute('r')) - 6},${ncy - 6})`);
+
+        return {x: ncx, y: ncy};  // ✅ 回傳正確座標避免累加誤差
       }
     });
 
@@ -236,6 +247,7 @@
       outline.setAttribute('r',nr+6);
       const ncx=Number(circle.getAttribute('cx')), ncy=Number(circle.getAttribute('cy'));
       handle.setAttribute('transform', `translate(${ncx+nr-6},${ncy-6})`);
+      return {x: ncx, y: ncy};  // 🟢 回傳吸附後的座標
     });
 
     selectShape(g); setStatus('已新增圓形。雙擊可命名，拖曳可移動。');
