@@ -81,25 +81,27 @@
     g.setAttribute('aria-label', name || '未命名');
   }
 
-  /** 把可見的圖形（rect/circle/text）標上 aria，並把裝飾 outline/handle 隱藏 */
-  function markChildrenA11y(g){
-    const name = g.getAttribute('data-name') || '未命名';
-    // 裝飾都隱藏
-    g.querySelectorAll('.outline, .handle, .handle *').forEach(el=>{
-      el.setAttribute('aria-hidden','true');
-    });
-    // 可見文字只當視覺用，不重複朗讀
-    g.querySelectorAll('text').forEach(t=>{
-      t.setAttribute('aria-hidden','true');
-    });
-    // 主體圖形（二選一）
-    const body = g.querySelector('rect:not(.outline), circle:not(.outline)');
-    if (body){
-      body.setAttribute('role','img');         // 有些讀屏更吃這個
-      body.setAttribute('aria-label', name);   // 次要名稱來源（若 g 被忽略時仍可唸）
-      body.setAttribute('focusable','false');  // 避免跟 g 搶焦點
+      /** 把可見的圖形（rect/circle/text）標上 aria，並把裝飾 outline/handle 隱藏 */
+    function markChildrenA11y(g){
+      const name = g.getAttribute('data-name') || '未命名';
+
+      // 裝飾都隱藏
+      g.querySelectorAll('.outline, .handle, .handle *').forEach(el=>{
+        el.setAttribute('aria-hidden','true');
+      });
+
+      // 可見文字只當視覺用，不重複朗讀
+      g.querySelectorAll('text').forEach(t=>{
+        t.setAttribute('aria-hidden','true');
+      });
+
+      // 主體圖形（rect or circle）也不重複朗讀
+      const body = g.querySelector('rect:not(.outline), circle:not(.outline)');
+      if (body){
+        body.setAttribute('aria-hidden','true');    // ⛔ 防止 TalkBack 重唸圖形
+        body.setAttribute('focusable','false');     // 不要搶焦點
+      }
     }
-  }
 
     function createGroup(roleLabel='未命名'){
     const g = document.createElementNS(SVGNS,'g');
