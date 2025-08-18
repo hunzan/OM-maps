@@ -206,6 +206,7 @@
     const g = createGroup('未命名圓形');
     const cx=200, cy=180, r=48;
     const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.classList.add('body');
     circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
     circle.setAttribute('fill', currentColor);
     circle.setAttribute('stroke','#2f435a'); circle.setAttribute('stroke-width','1.5');
@@ -262,13 +263,18 @@
     return t;
   }
 
-  function resizeHandle(x,y){
-    const g=svg('g', {transform:`translate(${x},${y})`});
-    g.classList.add('handle');
-    g.setAttribute('cursor','nwse-resize');
-    g.appendChild(svg('rect',{width:12,height:12,rx:2}));
-    return g;
-  }
+    function resizeHandle(x, y) {
+      const g = svg('g', {transform: `translate(${x},${y})`});  // ✅ 一定要保留這行
+      g.classList.add('handle');
+      g.setAttribute('cursor', 'nwse-resize');
+      g.appendChild(svg('rect', {
+        width: 12,
+        height: 12,
+        rx: 2,
+        class: 'handle-rect'  // ✅ 防止 serialize 抓錯
+      }));
+      return g;
+    }
 
   // === 拖曳/縮放 ===
     function enableDrag(g, opts){
@@ -447,24 +453,20 @@
     currentColor = colorPicker.value;
     applyColorToSelection(currentColor);
   });
+
     function applyColorToSelection(color){
       const g = document.querySelector('.shape[aria-selected="true"]');
       if(!g) return;
-      const bodyRect = g.querySelector('rect:not(.outline)');
-      const bodyCircle = g.querySelector('circle:not(.outline)');
+
+      const body = g.querySelector('.body');  // ✅ 不要再用 rect/circle 判斷了
       const text = g.querySelector('text');
 
-      if(bodyRect || bodyCircle){
-        (bodyRect || bodyCircle).setAttribute('fill', color);
-        // 形狀內的置中文字自動對比
+      if(body){
+        body.setAttribute('fill', color);  // ✅ 真正作用的位置
         if (text) text.setAttribute('fill', contrastTextColor(color));
-      } else if(text){
-        // 純標籤：維持使用者選的顏色
-        text.setAttribute('fill', color);
+        g.setAttribute('data-color', color);
+        announce('已套用顏色');
       }
-
-      g.setAttribute('data-color', color);
-      announce('已套用顏色');
     }
       // === 文字大小（全域） ===
     let textSize = 14;
@@ -593,19 +595,18 @@
           fill: g.getAttribute('data-color') || rect.getAttribute('fill') || '#203041'
         });
       }else if(circ){
+        const cx = +circ.getAttribute('cx');
+        const cy = +circ.getAttribute('cy');
+        const r = Number(circ.getAttribute('r')) || 48;
+
         out.push({
-          type:'circle', name, locked,
-          x:+circ.getAttribute('cx'), y:+circ.getAttribute('cy'),
-          r:+circ.getAttribute('r'),
+          type:'circle',
+          name,
+          locked,
+          cx, cy, r,
           fill: g.getAttribute('data-color') || circ.getAttribute('fill') || '#233348'
         });
-      }else if(label){
-        out.push({
-          type:'label', name, locked,
-          x:+label.getAttribute('x'), y:+label.getAttribute('y'),
-          color: g.getAttribute('data-color') || label.getAttribute('fill') || '#dbe6f2'
-        });
-      }
+       }
     });
     return out;
   }
@@ -666,26 +667,27 @@ function deserialize(shapes){
         handle.setAttribute('transform', `translate(${Number(rect.getAttribute('x'))+nw-8},${Number(rect.getAttribute('y'))+nh-8})`);
         return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
       });
-
-    }else if(s.type==='circle'){
+    }else if(s.type === 'circle'){
       const g = createGroup(s.name||'');
       const fill = s.fill || '#233348';
-      const circle = svg('circle',{cx:s.x, cy:s.y, r:s.r||48, fill, stroke:'#2f435a','stroke-width':1.5});
-      g.setAttribute('data-color', fill);
+      const r = Number.isFinite(s.r) ? s.r : 48;
+      const cx = Number.isFinite(s.cx) ? s.cx : (Number.isFinite(s.x) ? s.x : 100);
+      const cy = Number.isFinite(s.cy) ? s.cy : (Number.isFinite(s.y) ? s.y : 100);
 
-      const outline = svg('circle',{cx:s.x, cy:s.y, r:(s.r||48)+6, class:'outline','pointer-events':'none'});
-      const label = svgText(s.x, s.y, s.name||'', 'middle');
+      const circle = svg('circle',{cx, cy, r, fill, stroke:'#2f435a','stroke-width':1.5});
+      const outline = svg('circle',{cx, cy, r: r + 6, class:'outline','pointer-events':'none'});
+      const label = svgText(cx, cy, s.name||'', 'middle');
       label.setAttribute('fill', contrastTextColor(fill));
+      const handle = resizeHandle(cx + r - 6, cy - 6);
 
-      ensureTitle(g, s.name);
-
-      const handle = resizeHandle(s.x+(s.r||48)-6, s.y-6);
-      g.append(outline, circle, label, handle); layer.appendChild(g);
-      markChildrenA11y(g);
-
+      g.append(outline, circle, label, handle);
+      layer.appendChild(g);
+      g.setAttribute('data-color', fill);
       g.setAttribute('data-name', s.name||'');
       g.setAttribute('aria-label', s.name||'');
       g.setAttribute('data-locked', 'false');
+      ensureTitle(g, s.name);
+      markChildrenA11y(g);
 
       enableDrag(g,{onMove:(dx,dy)=>{
         if (g.getAttribute('data-locked') === 'true') return;
@@ -693,51 +695,23 @@ function deserialize(shapes){
         const by = Number(circle.getAttribute('cy'));
         const ncx = snapOn ? snap(bx + dx) : (bx + dx);
         const ncy = snapOn ? snap(by + dy) : (by + dy);
-        circle.setAttribute('cx',ncx); circle.setAttribute('cy',ncy);
-        outline.setAttribute('cx',ncx); outline.setAttribute('cy',ncy);
+        circle.setAttribute('cx',ncx); outline.setAttribute('cx',ncx);
+        circle.setAttribute('cy',ncy); outline.setAttribute('cy',ncy);
         label.setAttribute('x',ncx); label.setAttribute('y',ncy);
-        handle.setAttribute('transform', `translate(${ncx+Number(circle.getAttribute('r'))-6},${ncy-6})`);
-        return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
+        handle.setAttribute('transform', `translate(${ncx + Number(circle.getAttribute('r')) - 6},${ncy - 6})`);
+        return {x: ncx, y: ncy};
       }});
 
       enableResize(g, handle, (dw)=>{
         if (g.getAttribute('data-locked') === 'true') return;
-        let nr=Math.max(12, Number(circle.getAttribute('r'))+dw);
+        let nr = Math.max(12, Number(circle.getAttribute('r')) + dw);
         if (snapOn){ nr = Math.max(12, snapHalf(nr)); }
-        circle.setAttribute('r',nr);
-        outline.setAttribute('r',nr+6);
-        const ncx=Number(circle.getAttribute('cx')), ncy=Number(circle.getAttribute('cy'));
+        circle.setAttribute('r', nr);
+        outline.setAttribute('r', nr+6);
+        const ncx = Number(circle.getAttribute('cx')), ncy = Number(circle.getAttribute('cy'));
         handle.setAttribute('transform', `translate(${ncx+nr-6},${ncy-6})`);
-        return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
+        return {x: ncx, y: ncy};
       });
-
-    }else if(s.type==='label'){
-      const g = createGroup(s.name||'');
-      const color = s.color || '#dbe6f2';
-      const t = svgText(s.x, s.y, s.name||'', 'start');
-      t.setAttribute('fill', color);
-      g.setAttribute('data-color', color);
-
-      ensureTitle(g, s.name);
-
-      const outline = svg('rect',{x:(s.x||0)-6, y:(s.y||0)-22, width:110, height:32, rx:8, class:'outline','pointer-events':'none'});
-      g.append(outline, t); layer.appendChild(g);
-      markChildrenA11y(g);
-
-      g.setAttribute('data-name', s.name||'');
-      g.setAttribute('aria-label', s.name||'');
-      g.setAttribute('data-locked', 'false');
-
-      enableDrag(g,{onMove:(dx,dy)=>{
-        if (g.getAttribute('data-locked') === 'true') return;
-        const bx = Number(t.getAttribute('x'));
-        const by = Number(t.getAttribute('y'));
-        const nx = snapOn ? snap(bx + dx) : (bx + dx);
-        const ny = snapOn ? snap(by + dy) : (by + dy);
-        t.setAttribute('x',nx); t.setAttribute('y',ny);
-        outline.setAttribute('x',nx-6); outline.setAttribute('y',ny-22);
-        return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
-      }});
     }
   }
   applyTextSizeAll(textSize);
