@@ -66,7 +66,6 @@
 
   const SVGNS = 'http://www.w3.org/2000/svg';
 
-  /** 確保 g 內有 <title>，讓 aria-labelledby 指向它（讀屏主要名稱來源） */
   function ensureTitle(g, name){
     let titleEl = g.querySelector('title');
     const titleId = g.getAttribute('data-title-id') || uid('title');
@@ -79,7 +78,7 @@
     }
     titleEl.textContent = (name && String(name).trim()) || '未命名';
     g.setAttribute('data-title-id', titleId);
-    g.setAttribute('aria-labelledby', titleId);
+    g.setAttribute('aria-label', name || '未命名');
   }
 
   /** 把可見的圖形（rect/circle/text）標上 aria，並把裝飾 outline/handle 隱藏 */
@@ -102,14 +101,13 @@
     }
   }
 
-  function createGroup(roleLabel='未命名'){
+    function createGroup(roleLabel='未命名'){
     const g = document.createElementNS(SVGNS,'g');
     g.classList.add('shape');
     g.setAttribute('tabindex', '0');
     g.setAttribute('focusable', 'true');              // Android 有些版本需要
-    g.setAttribute('role','button');                  // 把它當可探索物件
-    g.setAttribute('aria-roledescription','地圖標示');
-
+    g.setAttribute('role', 'group'); // 或省略 role
+    g.setAttribute('aria-label', roleLabel);
     g.setAttribute('data-name', roleLabel);
     g.setAttribute('data-locked','false');
     g.setAttribute('aria-selected','false');
@@ -262,7 +260,13 @@
     return t;
   }
 
-  function resizeHandle(x,y){ const g=svg('g', {transform:`translate(${x},${y})`}); g.classList.add('handle'); g.setAttribute('cursor','nwse-resize'); g.appendChild(svg('rect',{width:12,height:12,rx:2})); return g; }
+  function resizeHandle(x,y){
+    const g=svg('g', {transform:`translate(${x},${y})`});
+    g.classList.add('handle');
+    g.setAttribute('cursor','nwse-resize');
+    g.appendChild(svg('rect',{width:12,height:12,rx:2}));
+    return g;
+  }
 
   // === 拖曳/縮放 ===
     function enableDrag(g, opts){
