@@ -168,6 +168,7 @@
       g.setAttribute('data-rotate', '0');
       g.dataset.cx = x + w / 2;
       g.dataset.cy = y + h / 2;
+      g.setAttribute('data-type', 'rect');
       g.classList.add('shape', 'rect-shape');
 
       g.append(outline, rect, label, handle);
@@ -204,6 +205,56 @@
           return { x: Number(rect.getAttribute('x')), y: Number(rect.getAttribute('y')) };
         }
       });
+
+    enableResize(g, handle, (dx, dy) => {
+      const oldW = Number(rect.getAttribute('width'));
+      const oldH = Number(rect.getAttribute('height'));
+
+      const newW = Math.max(24, oldW + dx);
+      const newH = Math.max(24, oldH + dy);
+
+      rect.setAttribute('width', newW);
+      rect.setAttribute('height', newH);
+
+      outline.setAttribute('width', newW + 6);
+      outline.setAttribute('height', newH + 6);
+
+      const x = Number(rect.getAttribute('x'));
+      const y = Number(rect.getAttribute('y'));
+
+      label.setAttribute('x', x + newW / 2);
+      label.setAttribute('y', y + newH / 2);
+
+      handle.setAttribute('transform', `translate(${x + newW - 6}, ${y + newH - 6})`);
+
+      g.dataset.cx = x + newW / 2;
+      g.dataset.cy = y + newH / 2;
+
+      return { x, y };
+    });
+
+    enableTouchResize(g, handle, (dx, dy) => {
+      const oldW = Number(rect.getAttribute('width'));
+      const oldH = Number(rect.getAttribute('height'));
+      const newW = Math.max(24, oldW + dx);
+      const newH = Math.max(24, oldH + dy);
+
+      rect.setAttribute('width', newW);
+      rect.setAttribute('height', newH);
+      outline.setAttribute('width', newW + 6);
+      outline.setAttribute('height', newH + 6);
+
+      const x = Number(rect.getAttribute('x'));
+      const y = Number(rect.getAttribute('y'));
+      label.setAttribute('x', x + newW / 2);
+      label.setAttribute('y', y + newH / 2);
+      handle.setAttribute('transform', `translate(${x + newW - 6}, ${y + newH - 6})`);
+
+      g.dataset.cx = x + newW / 2;
+      g.dataset.cy = y + newH / 2;
+
+      return { x, y };
+    });
 
       selectShape(g);
       setStatus('✅ 已新增方形，可旋轉版本建構中…');
@@ -350,6 +401,36 @@
     const end=()=>{ start=null; };
     handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
   }
+
+    function enableTouchResize(g, handle, onResize) {
+      let startX, startY;
+
+      handle.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+
+        const moveHandler = (e) => {
+          const touch = e.touches[0];
+          const dx = touch.clientX - startX;
+          const dy = touch.clientY - startY;
+
+          onResize(dx, dy);  // ✅ 傳 dx, dy 進去
+
+          startX = touch.clientX;
+          startY = touch.clientY;
+        };
+
+        const endHandler = () => {
+          window.removeEventListener('touchmove', moveHandler);
+          window.removeEventListener('touchend', endHandler);
+        };
+
+        window.addEventListener('touchmove', moveHandler);
+        window.addEventListener('touchend', endHandler);
+      });
+    }
 
   function svgPoint(ev){ const pt=stage.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const ctm=stage.getScreenCTM().inverse(); return pt.matrixTransform(ctm); }
 
@@ -689,6 +770,8 @@ function deserialize(shapes){
       g.setAttribute('data-name', s.name||'');
       g.setAttribute('aria-label', s.name||'');
       g.setAttribute('data-locked', 'false');
+      g.setAttribute('data-type', 'rect');
+      g.classList.add('shape', 'rect-shape');
 
       enableDrag(g,{onMove:(dx,dy)=>{
         if (g.getAttribute('data-locked') === 'true') return;
@@ -786,6 +869,193 @@ function deserialize(shapes){
     // 工具按鈕
     document.getElementById('addRect').addEventListener('click', addRect);
     document.getElementById('addCircle').addEventListener('click', addCircle);
+    document.getElementById('duplicate').addEventListener('click', () => {
+      const g = document.querySelector('.shape[aria-selected="true"]');
+      if (!g) {
+        announce('請先選取圖形再複製');
+        return;
+      }
+
+      const type = g.getAttribute('data-type');
+      const name = '複製的' + (g.getAttribute('data-name') || '圖形');
+      const fill = g.getAttribute('data-color') || '#888';
+
+      if (type === 'rect') {
+        const x = Number(g.querySelector('rect').getAttribute('x')) + 20;
+        const y = Number(g.querySelector('rect').getAttribute('y')) + 20;
+        const w = Number(g.querySelector('rect').getAttribute('width'));
+        const h = Number(g.querySelector('rect').getAttribute('height'));
+        const angle = Number(g.getAttribute('data-rotate')) || 0;
+
+        const newG = createGroup(name);
+        newG.classList.add('shape', 'rect-shape');
+        newG.setAttribute('data-type', 'rect');
+        newG.setAttribute('data-color', fill);
+        newG.setAttribute('data-rotate', angle);
+        newG.dataset.cx = x + w / 2;
+        newG.dataset.cy = y + h / 2;
+
+        const rect = svg('rect', { x, y, width: w, height: h, rx: 10, fill, stroke: '#2f435a', 'stroke-width': 1.5 });
+        rect.classList.add('body');
+
+        const outline = svg('rect', { x: x - 3, y: y - 3, width: w + 6, height: h + 6, rx: 12, class: 'outline', 'pointer-events': 'none' });
+
+        const label = svgText(x + w / 2, y + h / 2, name, 'middle');
+        label.setAttribute('fill', contrastTextColor(fill));
+
+        const handleX = x + w - 6, handleY = y + h - 6;
+        const handle = resizeHandle(handleX, handleY);
+        handle.setAttribute('transform', `translate(${handleX}, ${handleY})`);
+
+        newG.append(outline, rect, label, handle);
+        layer.appendChild(newG);
+        markChildrenA11y(newG);
+
+        // ✅ 拖曳功能
+        enableDrag(newG, {
+        onMove: (dx, dy) => {
+          const angle = Number(newG.getAttribute('data-rotate')) || 0;
+          const rad = angle * Math.PI / 180;
+          const dxRot = dx * Math.cos(rad) - dy * Math.sin(rad);
+          const dyRot = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+          const move = (el, attrX, attrY) => {
+            el.setAttribute(attrX, Number(el.getAttribute(attrX)) + dxRot);
+            el.setAttribute(attrY, Number(el.getAttribute(attrY)) + dyRot);
+          };
+
+          move(rect, 'x', 'y');
+          move(outline, 'x', 'y');
+          move(label, 'x', 'y');
+
+          const currentTransform = handle.getAttribute('transform') || 'translate(0,0)';
+          const match = currentTransform.match(/translate\(([^,]+),([^)]+)\)/);
+          const hx = Number(match?.[1] ?? 0) + dx;
+          const hy = Number(match?.[2] ?? 0) + dy;
+          handle.setAttribute('transform', `translate(${hx}, ${hy})`);
+
+          newG.dataset.cx = Number(rect.getAttribute('x')) + Number(rect.getAttribute('width')) / 2;
+          newG.dataset.cy = Number(rect.getAttribute('y')) + Number(rect.getAttribute('height')) / 2;
+
+          return { x: Number(rect.getAttribute('x')), y: Number(rect.getAttribute('y')) };
+        }
+        });
+
+        // ✅ 縮放功能
+        enableResize(g, handle, (dx, dy) => {
+          const oldW = Number(rect.getAttribute('width'));
+          const oldH = Number(rect.getAttribute('height'));
+
+          const newW = Math.max(24, oldW + dx);
+          const newH = Math.max(24, oldH + dy);
+
+          rect.setAttribute('width', newW);
+          rect.setAttribute('height', newH);
+
+          outline.setAttribute('width', newW + 6);
+          outline.setAttribute('height', newH + 6);
+
+          const x = Number(rect.getAttribute('x'));
+          const y = Number(rect.getAttribute('y'));
+
+          label.setAttribute('x', x + newW / 2);
+          label.setAttribute('y', y + newH / 2);
+
+          handle.setAttribute('transform', `translate(${x + newW - 6}, ${y + newH - 6})`);
+
+          g.dataset.cx = x + newW / 2;
+          g.dataset.cy = y + newH / 2;
+
+          return { x, y };
+        });
+
+        enableTouchResize(g, handle, (dx, dy) => {
+          const oldW = Number(rect.getAttribute('width'));
+          const oldH = Number(rect.getAttribute('height'));
+          const newW = Math.max(24, oldW + dx);
+          const newH = Math.max(24, oldH + dy);
+
+          rect.setAttribute('width', newW);
+          rect.setAttribute('height', newH);
+          outline.setAttribute('width', newW + 6);
+          outline.setAttribute('height', newH + 6);
+
+          const x = Number(rect.getAttribute('x'));
+          const y = Number(rect.getAttribute('y'));
+          label.setAttribute('x', x + newW / 2);
+          label.setAttribute('y', y + newH / 2);
+          handle.setAttribute('transform', `translate(${x + newW - 6}, ${y + newH - 6})`);
+
+          g.dataset.cx = x + newW / 2;
+          g.dataset.cy = y + newH / 2;
+
+          return { x, y };
+        });
+
+        selectShape(newG);
+        setStatus('✅ 已複製方形圖形');
+
+      } else if (type === 'circle') {
+        const cx = Number(g.querySelector('circle').getAttribute('cx')) + 20;
+        const cy = Number(g.querySelector('circle').getAttribute('cy')) + 20;
+        const r = Number(g.querySelector('circle').getAttribute('r'));
+
+        const newG = createGroup(name);
+        newG.classList.add('shape', 'circle-shape');
+        newG.setAttribute('data-type', 'circle');
+        newG.setAttribute('data-color', fill);
+        newG.setAttribute('data-cx', cx);
+        newG.setAttribute('data-cy', cy);
+        newG.setAttribute('data-r', r);
+        newG.setAttribute('data-locked', 'false');
+
+        const circle = svg('circle', { cx, cy, r, fill, stroke: '#2f435a', 'stroke-width': 1.5 });
+        circle.classList.add('body');
+        const outline = svg('circle', { cx, cy, r: r + 6, class: 'outline', 'pointer-events': 'none' });
+        const label = svgText(cx, cy, name, 'middle');
+        label.setAttribute('fill', contrastTextColor(fill));
+        const handle = resizeHandle(cx + r - 6, cy - 6);
+
+        newG.append(outline, circle, label, handle);
+        layer.appendChild(newG);
+        markChildrenA11y(newG);
+        enableDrag(newG, {
+          onMove: (dx, dy) => {
+            const bx = Number(circle.getAttribute('cx'));
+            const by = Number(circle.getAttribute('cy'));
+            const ncx = snapOn ? snap(bx + dx) : (bx + dx);
+            const ncy = snapOn ? snap(by + dy) : (by + dy);
+            circle.setAttribute('cx', ncx);
+            circle.setAttribute('cy', ncy);
+            outline.setAttribute('cx', ncx);
+            outline.setAttribute('cy', ncy);
+            label.setAttribute('x', ncx);
+            label.setAttribute('y', ncy);
+            handle.setAttribute('transform', `translate(${ncx + r - 6}, ${ncy - 6})`);
+            newG.setAttribute('data-cx', ncx);
+            newG.setAttribute('data-cy', ncy);
+            return { x: ncx, y: ncy };
+          }
+        });
+        enableResize(newG, handle, (dw) => {
+          let nr = Math.max(12, Number(circle.getAttribute('r')) + dw);
+          if (snapOn) nr = Math.max(12, snapHalf(nr));
+          circle.setAttribute('r', nr);
+          outline.setAttribute('r', nr + 6);
+          const ncx = Number(circle.getAttribute('cx'));
+          const ncy = Number(circle.getAttribute('cy'));
+          handle.setAttribute('transform', `translate(${ncx + nr - 6}, ${ncy - 6})`);
+          newG.setAttribute('data-r', nr);  // ✅ 用 newG，不是 g
+          return { x: ncx, y: ncy };
+        });
+
+        selectShape(newG);
+        setStatus('✅ 已複製圓形');
+      } else {
+        announce('尚未支援此類圖形的複製');
+      }
+    });
+
     document.getElementById('rename').addEventListener('click', ()=>{
       const g = document.querySelector('.shape[aria-selected="true"]');
       if(g) renameShape(g);
