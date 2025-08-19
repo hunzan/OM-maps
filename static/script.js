@@ -125,19 +125,19 @@
   }
 
   // 單一版本 selectShape（會同步顏色選取器）
-  function selectShape(g){
-    document.querySelectorAll('.shape[aria-selected="true"]').forEach(el=> el.setAttribute('aria-selected','false'));
-    if (g){
-      g.setAttribute('aria-selected','true');
-      g.focus({preventScroll:true});
-      updateLockBadge(g);
-      const c = g.getAttribute('data-color');
-      if(c){ currentColor = c; try{ colorPicker.value = c; }catch(_){} }
-      announce(`已選取：${g.getAttribute('data-name')}`);
-    } else {
-      updateLockBadge(null);
+    function selectShape(g){
+      document.querySelectorAll('.shape[aria-selected="true"]').forEach(el => el.removeAttribute('aria-selected'));
+      if (g){
+        g.setAttribute('aria-selected','true');
+        g.focus({preventScroll:true});
+        updateLockBadge(g);
+        const c = g.getAttribute('data-color');
+        if(c){ currentColor = c; try{ colorPicker.value = c; }catch(_){} }
+        announce(`已選取：${g.getAttribute('data-name')}`);
+      } else {
+        updateLockBadge(null);
+      }
     }
-  }
 
   function updateLockBadge(_) {
     const all = document.querySelectorAll('.shape');
@@ -152,107 +152,135 @@
   document.getElementById('toggleLock').addEventListener('click', toggleLockAll);
 
   // === 形狀建立 ===
-  function addRect(){
-    const g = createGroup('未命名方形');
-    const x=60, y=60, w=120, h=80;
-    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    rect.setAttribute('x', x); rect.setAttribute('y', y);
-    rect.setAttribute('width', w); rect.setAttribute('height', h);
-    rect.setAttribute('rx', 10);
-    rect.setAttribute('fill', currentColor);
-    rect.setAttribute('stroke', '#2f435a'); rect.setAttribute('stroke-width','1.5');
-    g.setAttribute('data-color', currentColor);
+    function addRect(){
+      const g = createGroup('未命名方形');
+      const x = 120, y = 120, w = 120, h = 48;
+      const fill = currentColor;
+      const rect = svg('rect', { x, y, width: w, height: h, rx:10, fill, stroke:'#2f435a', 'stroke-width':1.5, class: 'body' });
+      const outline = svg('rect', { x: x-3, y: y-3, width: w+6, height: h+6, rx:12, class:'outline', 'pointer-events':'none' });
+      const label = svgText(x + w/2, y + h/2, '未命名', 'middle');
+      label.setAttribute('fill', contrastTextColor(fill));
+      const handleX = x + w - 6, handleY = y + h - 6;
+      const handle = resizeHandle(handleX, handleY);
+      handle.setAttribute('transform', `translate(${handleX}, ${handleY})`);
 
-    const outline = svg('rect', {x:x-3,y:y-3,width:w+6,height:h+6,rx:12, class:'outline','pointer-events':'none'});
-    const label = svgText(x+w/2, y+h/2, '未命名', 'middle');
-    label.setAttribute('fill', contrastTextColor(currentColor));
-    const handle = resizeHandle(x+w-8, y+h-8);
-    g.append(outline, rect, label, handle); layer.appendChild(g);
-    markChildrenA11y(g);
+      g.setAttribute('data-color', fill);
+      g.setAttribute('data-rotate', '0');
+      g.dataset.cx = x + w / 2;
+      g.dataset.cy = y + h / 2;
+      g.classList.add('shape', 'rect-shape');
 
-    // 拖曳：吸附
-    enableDrag(g, {
-      onMove:(dx,dy)=>{
-        const bx = Number(rect.getAttribute('x'));
-        const by = Number(rect.getAttribute('y'));
-        const nx = snapOn ? snap(bx + dx) : (bx + dx);
-        const ny = snapOn ? snap(by + dy) : (by + dy);
-        rect.setAttribute('x', nx); rect.setAttribute('y', ny);
-        outline.setAttribute('x', nx - 3); outline.setAttribute('y', ny - 3);
-        label.setAttribute('x', nx + Number(rect.getAttribute('width')) / 2);
-        label.setAttribute('y', ny + Number(rect.getAttribute('height')) / 2);
-        handle.setAttribute('transform', `translate(${nx + Number(rect.getAttribute('width')) - 8},${ny + Number(rect.getAttribute('height')) - 8})`);
-        return {x: nx, y: ny};  // ✅ 改成回傳新的實際位置
-      }
-    });
+      g.append(outline, rect, label, handle);
+      layer.appendChild(g);
+      markChildrenA11y(g);
 
-    // 縮放：吸附寬高
-    enableResize(g, handle, (dw,dh)=>{
-      let nw=Math.max(24, Number(rect.getAttribute('width'))+dw);
-      let nh=Math.max(24, Number(rect.getAttribute('height'))+dh);
-      if (snapOn){ nw = Math.max(24, snap(nw)); nh = Math.max(24, snap(nh)); }
-      rect.setAttribute('width',nw); rect.setAttribute('height',nh);
-      outline.setAttribute('width',nw+6); outline.setAttribute('height',nh+6);
-      label.setAttribute('x', Number(rect.getAttribute('x'))+nw/2);
-      label.setAttribute('y', Number(rect.getAttribute('y'))+nh/2);
-      handle.setAttribute('transform', `translate(${Number(rect.getAttribute('x'))+nw-8},${Number(rect.getAttribute('y'))+nh-8})`);
-      return {x, y};  // 🟢 回傳吸附後的座標
-    });
+      enableDrag(g, {
+        onMove: (dx, dy) => {
+          const angle = Number(g.getAttribute('data-rotate')) || 0;
+          const rad = angle * Math.PI / 180;
+          const dxRot = dx * Math.cos(rad) - dy * Math.sin(rad);
+          const dyRot = dx * Math.sin(rad) + dy * Math.cos(rad);
 
-    selectShape(g); setStatus('已新增方形。雙擊可命名，拖曳可移動。');
-  }
+          const move = (el, attrX, attrY) => {
+            el.setAttribute(attrX, Number(el.getAttribute(attrX)) + dxRot);
+            el.setAttribute(attrY, Number(el.getAttribute(attrY)) + dyRot);
+          };
 
-  function addCircle(){
-    const g = createGroup('未命名圓形');
-    const cx=200, cy=180, r=48;
-    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    circle.classList.add('body');
-    circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
-    circle.setAttribute('fill', currentColor);
-    circle.setAttribute('stroke','#2f435a'); circle.setAttribute('stroke-width','1.5');
-    g.setAttribute('data-color', currentColor);
+          move(rect, 'x', 'y');
+          move(outline, 'x', 'y');
+          move(label, 'x', 'y');
 
-    const outline = svg('circle', {cx,cy,r:r+6, class:'outline','pointer-events':'none'});
-    const label = svgText(cx, cy, '未命名', 'middle');
-    label.setAttribute('fill', contrastTextColor(currentColor));
-    const handle = resizeHandle(cx+r-6, cy-6);
-    g.append(outline, circle, label, handle); layer.appendChild(g);
-    markChildrenA11y(g);
+          // 直接記錄 handle 新座標
+          const currentTransform = handle.getAttribute('transform') || 'translate(0,0)';
+          const match = currentTransform.match(/translate\(([^,]+),([^)]+)\)/);
+          const hx = Number(match?.[1] ?? 0) + dx;
+          const hy = Number(match?.[2] ?? 0) + dy;
+          handle.setAttribute('transform', `translate(${hx}, ${hy})`);
 
-    // 拖曳：吸附中心點
-    enableDrag(g, {
-      onMove:(dx,dy)=>{
-        // 🔧 用目前屬性讀取位置，而非初始值 cx/cy
-        const bx = Number(circle.getAttribute('cx'));
-        const by = Number(circle.getAttribute('cy'));
-        const ncx = snapOn ? snap(bx + dx) : (bx + dx);
-        const ncy = snapOn ? snap(by + dy) : (by + dy);
+          // 更新中心座標
+          g.dataset.cx = Number(rect.getAttribute('x')) + Number(rect.getAttribute('width')) / 2;
+          g.dataset.cy = Number(rect.getAttribute('y')) + Number(rect.getAttribute('height')) / 2;
 
-        circle.setAttribute('cx', ncx);
-        circle.setAttribute('cy', ncy);
-        outline.setAttribute('cx', ncx);
-        outline.setAttribute('cy', ncy);
-        label.setAttribute('x', ncx);
-        label.setAttribute('y', ncy);
-        handle.setAttribute('transform', `translate(${ncx + Number(circle.getAttribute('r')) - 6},${ncy - 6})`);
+          return { x: Number(rect.getAttribute('x')), y: Number(rect.getAttribute('y')) };
+        }
+      });
 
-        return {x: ncx, y: ncy};  // ✅ 回傳正確座標避免累加誤差
-      }
-    });
+      selectShape(g);
+      setStatus('✅ 已新增方形，可旋轉版本建構中…');
+    }
 
-    // 縮放：吸附半徑（半格更順）
-    enableResize(g, handle, (dw)=>{
-      let nr=Math.max(12, Number(circle.getAttribute('r'))+dw);
-      if (snapOn){ nr = Math.max(12, snapHalf(nr)); }
-      circle.setAttribute('r',nr);
-      outline.setAttribute('r',nr+6);
-      const ncx=Number(circle.getAttribute('cx')), ncy=Number(circle.getAttribute('cy'));
-      handle.setAttribute('transform', `translate(${ncx+nr-6},${ncy-6})`);
-      return {x: ncx, y: ncy};  // 🟢 回傳吸附後的座標
-    });
+    function addCircle() {
+      const name = '未命名圓形';
+      const cx = 200, cy = 180, r = 48;
+      const g = createGroup(name);
+      g.classList.add('shape', 'circle-shape');
+      g.setAttribute('data-type', 'circle');
+      g.setAttribute('data-color', currentColor);
+      g.setAttribute('data-cx', cx);
+      g.setAttribute('data-cy', cy);
+      g.setAttribute('data-r', r);
+      g.setAttribute('data-locked', 'false');
 
-    selectShape(g); setStatus('已新增圓形。雙擊可命名，拖曳可移動。');
-  }
+      const circle = svg('circle', {
+        cx, cy, r,
+        fill: currentColor,
+        stroke: '#2f435a',
+        'stroke-width': 1.5
+      });
+      circle.classList.add('body');  // ✅ 確保 class 被加上
+
+      const outline = svg('circle', {
+        cx, cy, r: r + 6,
+        class: 'outline',
+        'pointer-events': 'none'
+      });
+
+      const label = svgText(cx, cy, name, 'middle');
+      label.setAttribute('fill', contrastTextColor(currentColor));
+
+      const handle = resizeHandle(cx + r - 6, cy - 6);
+
+      g.append(outline, circle, label, handle);
+      layer.appendChild(g);
+
+      markChildrenA11y(g);
+
+      // 拖曳（吸附中心）
+      enableDrag(g, {
+        onMove: (dx, dy) => {
+          const bx = Number(circle.getAttribute('cx'));
+          const by = Number(circle.getAttribute('cy'));
+          const ncx = snapOn ? snap(bx + dx) : (bx + dx);
+          const ncy = snapOn ? snap(by + dy) : (by + dy);
+          circle.setAttribute('cx', ncx);
+          circle.setAttribute('cy', ncy);
+          outline.setAttribute('cx', ncx);
+          outline.setAttribute('cy', ncy);
+          label.setAttribute('x', ncx);
+          label.setAttribute('y', ncy);
+          handle.setAttribute('transform', `translate(${ncx + Number(circle.getAttribute('r')) - 6}, ${ncy - 6})`);
+          g.setAttribute('data-cx', ncx);
+          g.setAttribute('data-cy', ncy);
+          return { x: ncx, y: ncy };
+        }
+      });
+
+      // 縮放
+      enableResize(g, handle, (dw) => {
+        let nr = Math.max(12, Number(circle.getAttribute('r')) + dw);
+        if (snapOn) nr = Math.max(12, snapHalf(nr));
+        circle.setAttribute('r', nr);
+        outline.setAttribute('r', nr + 6);
+        const ncx = Number(circle.getAttribute('cx'));
+        const ncy = Number(circle.getAttribute('cy'));
+        handle.setAttribute('transform', `translate(${ncx + nr - 6}, ${ncy - 6})`);
+        g.setAttribute('data-r', nr);
+        return { x: ncx, y: ncy };
+      });
+
+      selectShape(g);
+      setStatus('已新增圓形。雙擊可命名，拖曳可移動。');
+    }
 
   // === 小工具 ===
   function svg(name, attrs){ const el=document.createElementNS('http://www.w3.org/2000/svg', name); for(const k in attrs){ el.setAttribute(k, attrs[k]); } return el; }
@@ -458,16 +486,19 @@
       const g = document.querySelector('.shape[aria-selected="true"]');
       if(!g) return;
 
-      const body = g.querySelector('.body');  // ✅ 不要再用 rect/circle 判斷了
+      const body = g.querySelector('.body')
+          || g.querySelector('rect:not(.outline)')
+          || g.querySelector('circle');
       const text = g.querySelector('text');
 
       if(body){
-        body.setAttribute('fill', color);  // ✅ 真正作用的位置
+        body.setAttribute('fill', color);
         if (text) text.setAttribute('fill', contrastTextColor(color));
         g.setAttribute('data-color', color);
         announce('已套用顏色');
       }
     }
+
       // === 文字大小（全域） ===
     let textSize = 14;
     const textSizeInput = document.getElementById('textSize');
@@ -579,37 +610,44 @@
 
   // === 序列化 / 反序列化 ===
   // === serialize（匯出）：一律鎖定 ===
-  function serialize(){
-    const out = [];
-    layer.querySelectorAll('.shape').forEach(g=>{
-      const name = g.getAttribute('data-name') || '未命名';
-      const rect = g.querySelector('rect:not(.outline)');
-      const circ = g.querySelector('circle:not(.outline)');
-      const label = g.querySelector('text');
-      const locked = true; // 強制鎖定匯出
-      if(rect){
-        out.push({
-          type:'rect', name, locked,
-          x:+rect.getAttribute('x'), y:+rect.getAttribute('y'),
-          w:+rect.getAttribute('width'), h:+rect.getAttribute('height'),
-          fill: g.getAttribute('data-color') || rect.getAttribute('fill') || '#203041'
-        });
-      }else if(circ){
-        const cx = +circ.getAttribute('cx');
-        const cy = +circ.getAttribute('cy');
-        const r = Number(circ.getAttribute('r')) || 48;
+    function serialize() {
+      const out = [];
+      layer.querySelectorAll('.shape').forEach(g => {
+        const name = g.getAttribute('data-name') || '未命名';
+        const fill = g.getAttribute('data-color') || '#203041';
+        const locked = true; // 一律鎖定匯出
 
-        out.push({
-          type:'circle',
-          name,
-          locked,
-          cx, cy, r,
-          fill: g.getAttribute('data-color') || circ.getAttribute('fill') || '#233348'
-        });
-       }
-    });
-    return out;
-  }
+        // 🧠 自動判斷圖形類型（若沒設定）
+        let type = g.getAttribute('data-type');
+        if (!type) {
+          if (g.querySelector('rect:not(.outline)')) type = 'rect';
+          else if (g.querySelector('circle')) type = 'circle';
+          else return; // 不支援的圖形類型
+        }
+
+        if (type === 'rect') {
+          const rect = g.querySelector('rect:not(.outline)');
+          out.push({
+            type: 'rect', name, locked, fill,
+            x: +rect.getAttribute('x'),
+            y: +rect.getAttribute('y'),
+            w: +rect.getAttribute('width'),
+            h: +rect.getAttribute('height'),
+            rotate: +(g.getAttribute('data-rotate') || 0)
+          });
+        } else if (type === 'circle') {
+          // ⛑ 若有 data-cx/cy/r 就用，否則 fallback 取 circle 的屬性
+          const c = g.querySelector('circle');
+          out.push({
+            type: 'circle', name, locked, fill,
+            cx: +(g.getAttribute('data-cx') || c?.getAttribute('cx') || 0),
+            cy: +(g.getAttribute('data-cy') || c?.getAttribute('cy') || 0),
+            r: +(g.getAttribute('data-r') || c?.getAttribute('r') || 48)
+          });
+        }
+      });
+      return out;
+    }
 
   function clearAll(){ [...layer.querySelectorAll('.shape')].forEach(n=>n.remove()); }
   document.getElementById('btnClear').addEventListener('click', () => {
@@ -625,7 +663,18 @@ function deserialize(shapes){
       const g = createGroup(s.name||'');
       const fill = s.fill || '#203041';
       const rect = svg('rect',{x:s.x,y:s.y,width:s.w,height:s.h,rx:10, fill, stroke:'#2f435a','stroke-width':1.5});
+      rect.classList.add('body');
       g.setAttribute('data-color', fill);
+
+      // ⭐ 加入旋轉資訊（如果有）及中心點
+      const cx = s.x + s.w / 2;
+      const cy = s.y + s.h / 2;
+      g.dataset.cx = cx;
+      g.dataset.cy = cy;
+      if (s.rotate) {
+        g.setAttribute('transform', `rotate(${s.rotate} ${cx} ${cy})`);
+        g.setAttribute('data-rotate', s.rotate);
+      }
 
       const outline = svg('rect',{x:s.x-3,y:s.y-3,width:(s.w||0)+6,height:(s.h||0)+6,rx:12,class:'outline','pointer-events':'none'});
       const label = svgText(s.x+(s.w||0)/2, s.y+(s.h||0)/2, s.name||'', 'middle');
@@ -667,50 +716,67 @@ function deserialize(shapes){
         handle.setAttribute('transform', `translate(${Number(rect.getAttribute('x'))+nw-8},${Number(rect.getAttribute('y'))+nh-8})`);
         return {x: nx, y: ny}; // ✅ 回傳吸附後的實際位置
       });
-    }else if(s.type === 'circle'){
-      const g = createGroup(s.name||'');
+    } else if (s.type === 'circle') {
+      const name = s.name || '未命名圓形';
+      const cx = (typeof s.cx === 'number') ? s.cx : (s.x ?? 100);
+      const cy = (typeof s.cy === 'number') ? s.cy : (s.y ?? 100);
+      const r = (typeof s.r === 'number') ? s.r : 48;
       const fill = s.fill || '#233348';
-      const r = Number.isFinite(s.r) ? s.r : 48;
-      const cx = Number.isFinite(s.cx) ? s.cx : (Number.isFinite(s.x) ? s.x : 100);
-      const cy = Number.isFinite(s.cy) ? s.cy : (Number.isFinite(s.y) ? s.y : 100);
 
-      const circle = svg('circle',{cx, cy, r, fill, stroke:'#2f435a','stroke-width':1.5});
-      const outline = svg('circle',{cx, cy, r: r + 6, class:'outline','pointer-events':'none'});
-      const label = svgText(cx, cy, s.name||'', 'middle');
+      const g = createGroup(name);
+      g.classList.add('circle-shape');
+      g.setAttribute('data-type', 'circle');
+      g.setAttribute('data-color', fill);
+      g.setAttribute('data-cx', cx);
+      g.setAttribute('data-cy', cy);
+      g.setAttribute('data-r', r);
+      g.setAttribute('data-name', name);
+      g.setAttribute('aria-label', name);
+      g.setAttribute('data-locked', 'false');
+      ensureTitle(g, name);
+
+      const circle = svg('circle', { cx, cy, r, fill, stroke: '#2f435a', 'stroke-width': 1.5 });
+      circle.classList.add('body');
+      const outline = svg('circle', { cx, cy, r: r + 6, class: 'outline', 'pointer-events': 'none' });
+      const label = svgText(cx, cy, name, 'middle');
       label.setAttribute('fill', contrastTextColor(fill));
       const handle = resizeHandle(cx + r - 6, cy - 6);
 
       g.append(outline, circle, label, handle);
       layer.appendChild(g);
-      g.setAttribute('data-color', fill);
-      g.setAttribute('data-name', s.name||'');
-      g.setAttribute('aria-label', s.name||'');
-      g.setAttribute('data-locked', 'false');
-      ensureTitle(g, s.name);
       markChildrenA11y(g);
 
-      enableDrag(g,{onMove:(dx,dy)=>{
-        if (g.getAttribute('data-locked') === 'true') return;
-        const bx = Number(circle.getAttribute('cx'));
-        const by = Number(circle.getAttribute('cy'));
-        const ncx = snapOn ? snap(bx + dx) : (bx + dx);
-        const ncy = snapOn ? snap(by + dy) : (by + dy);
-        circle.setAttribute('cx',ncx); outline.setAttribute('cx',ncx);
-        circle.setAttribute('cy',ncy); outline.setAttribute('cy',ncy);
-        label.setAttribute('x',ncx); label.setAttribute('y',ncy);
-        handle.setAttribute('transform', `translate(${ncx + Number(circle.getAttribute('r')) - 6},${ncy - 6})`);
-        return {x: ncx, y: ncy};
-      }});
+      enableDrag(g, {
+        onMove: (dx, dy) => {
+          if (g.getAttribute('data-locked') === 'true') return;
+          const bx = Number(circle.getAttribute('cx'));
+          const by = Number(circle.getAttribute('cy'));
+          const ncx = snapOn ? snap(bx + dx) : (bx + dx);
+          const ncy = snapOn ? snap(by + dy) : (by + dy);
+          circle.setAttribute('cx', ncx);
+          circle.setAttribute('cy', ncy);
+          outline.setAttribute('cx', ncx);
+          outline.setAttribute('cy', ncy);
+          label.setAttribute('x', ncx);
+          label.setAttribute('y', ncy);
+          handle.setAttribute('transform', `translate(${ncx + r - 6}, ${ncy - 6})`);
+          g.setAttribute('data-cx', ncx);
+          g.setAttribute('data-cy', ncy);
+          return { x: ncx, y: ncy };
+        }
+      });
 
-      enableResize(g, handle, (dw)=>{
+      enableResize(g, handle, (dw) => {
         if (g.getAttribute('data-locked') === 'true') return;
         let nr = Math.max(12, Number(circle.getAttribute('r')) + dw);
-        if (snapOn){ nr = Math.max(12, snapHalf(nr)); }
+        if (snapOn) nr = Math.max(12, snapHalf(nr));
         circle.setAttribute('r', nr);
-        outline.setAttribute('r', nr+6);
-        const ncx = Number(circle.getAttribute('cx')), ncy = Number(circle.getAttribute('cy'));
-        handle.setAttribute('transform', `translate(${ncx+nr-6},${ncy-6})`);
-        return {x: ncx, y: ncy};
+        outline.setAttribute('r', nr + 6);
+        const ncx = Number(circle.getAttribute('cx'));
+        const ncy = Number(circle.getAttribute('cy'));
+        handle.setAttribute('transform', `translate(${ncx + nr - 6}, ${ncy - 6})`);
+        g.setAttribute('data-r', nr);
+        return { x: ncx, y: ncy };
       });
     }
   }
@@ -732,6 +798,16 @@ function deserialize(shapes){
       const g = document.querySelector('.shape[aria-selected="true"]');
       if(g) toggleLock(g);
     });
+    document.getElementById('rotateShape').addEventListener('click', ()=>{
+      const g = document.querySelector('.shape[aria-selected="true"]');
+      if (!g || g.getAttribute('data-locked') === 'true') return;
+
+      const current = Number(g.getAttribute('data-rotate') || '0');
+      const next = (current + 15) % 360;
+      g.setAttribute('transform', `rotate(${next} ${g.dataset.cx||0} ${g.dataset.cy||0})`);
+      g.setAttribute('data-rotate', next);
+    });
+
     document.getElementById('btnClear').addEventListener('click', clearAll); // 🧹 加這行！
 
     stage.addEventListener('pointerdown', (ev)=>{
